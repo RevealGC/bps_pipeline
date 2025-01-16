@@ -1,86 +1,193 @@
-import os
-from typing import Union
+"""parquet IO manager for Dagster pipelines."""
 
-import pandas
+import os
+import pandas as pd
 from dagster import (
     ConfigurableIOManager,
     InputContext,
     OutputContext,
-    ResourceDependency,
-    _check as check,
+    Config,
+    io_manager,
 )
 from dagster._seven.temp_dir import get_system_temp_directory
-from dagster_pyspark.resources import PySparkResource
-from pyspark.sql import DataFrame as PySparkDataFrame
+from pydantic import Field
+from typing import Optional
 
 
 class PartitionedParquetIOManager(ConfigurableIOManager):
-    """This IOManager will take in a pandas or pyspark dataframe and store it in parquet at the
-    specified path.
+    """
+    A unified IOManager for handling Parquet files in a Dagster pipeline.
 
-    It stores outputs for different partitions in different filepaths.
+    This IOManager supports both local and S3 storage for pandas DataFrames.
+    It allows for custom paths specified via metadata and partitions assets
+    by including the partition key in the file path.
 
-    Downstream ops can either load this dataframe into a spark session or simply retrieve a path
-    to where the data is stored.
+    Attributes:
+        base_path (str): The local directory where Parquet files are stored by default.
+        s3_bucket (str, optional): If provided, Parquet files will be stored in S3 at s3://{s3_bucket}.
+          Otherwise, files are stored locally.
+
+    Methods:
+        handle_output(context, obj): Saves a pandas DataFrame as a Parquet file.
+        load_input(context): Loads a pandas DataFrame from a Parquet file.
+
+    Usage Example:
+        ```python
+        from dagster import io_manager, Definitions, asset
+        import pandas as pd
+        from dagster._seven.temp_dir import get_system_temp_directory
+
+        @io_manager(config_schema={"base_path": str, "s3_bucket": str})
+        def partitioned_parquet_io_manager(init_context):
+            return PartitionedParquetIOManager(
+                base_path=init_context.resource_config.get("base_path", get_system_temp_directory()),
+                s3_bucket=init_context.resource_config.get("s3_bucket"),
+            )
+
+        @asset(
+            io_manager_key="parquet_io_manager",
+            metadata={"custom_path": "s3://my-bucket/{partition_key}_{filename}.parquet"},
+        )
+        def my_asset(context) -> pd.DataFrame:
+            data = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+            return data
+
+        defs = Definitions(
+            assets=[my_asset],
+            resources={
+                "parquet_io_manager": partitioned_parquet_io_manager.configured(
+                    {
+                        "base_path": "data/parquet_files",
+                        "s3_bucket": "my-bucket"
+                    }
+                )
+            },
+        )
+        ```
     """
 
-    pyspark: ResourceDependency[PySparkResource]
+    base_path: str = get_system_temp_directory()
+    s3_bucket: str = None
 
     @property
-    def _base_path(self):
-        raise NotImplementedError()
+    def _base_path(self) -> str:
+        """
+        Return the base path to be used.
 
-    def handle_output(self, context: OutputContext, obj: Union[pandas.DataFrame, PySparkDataFrame]):
-        path = self._get_path(context)
-        if "://" not in self._base_path:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+        If `s3_bucket` is set, then the path will point to S3
+        (e.g., 's3://my-bucket'). Otherwise, it points to `base_path`.
+        """
+        if self.s3_bucket:
+            return f"s3://{self.s3_bucket}"
+        return self.base_path
 
-        if isinstance(obj, pandas.DataFrame):
-            row_count = len(obj)
-            context.log.info(f"Row count: {row_count}")
-            obj.to_parquet(path=path, index=False)
-        elif isinstance(obj, PySparkDataFrame):
-            row_count = obj.count()
-            obj.write.parquet(path=path, mode="overwrite")
-        else:
-            raise Exception(f"Outputs of type {type(obj)} not supported.")
+    def handle_output(self, context: OutputContext, obj: pd.DataFrame):
+        """
+        Save a pandas DataFrame as a Parquet file.
 
-        context.add_output_metadata({"row_count": row_count, "path": path})
+        If a custom output path is provided in the metadata (via "outpath" or any chosen metadata key),
+        it will be used. Otherwise, a default path is constructed as:
+        {base_path or s3_bucket}/{partition_key or default}_{asset_name}.parquet
 
-    def load_input(self, context) -> Union[PySparkDataFrame, str]:
-        path = self._get_path(context)
-        if context.dagster_type.typing_type == PySparkDataFrame:
-            # return pyspark dataframe
-            return self.pyspark.spark_session.read.parquet(path)
+        Args:
+            context (OutputContext): Dagster output context, including asset_key and partition_key.
+            obj (pd.DataFrame): The DataFrame to save as Parquet.
+        """
 
-        return check.failed(
-            f"Inputs of type {context.dagster_type} not supported. Please specify a valid type "
-            "for this input either on the argument of the @asset-decorated function."
+        # Determine the output path
+        custom_path = context.metadata.get("outpath") or context.metadata.get(
+            "custom_path"
         )
-
-    def _get_path(self, context: Union[InputContext, OutputContext]):
-        key = context.asset_key.path[-1]
-
-        if context.has_asset_partitions:
-            start, end = context.asset_partitions_time_window
-            dt_format = "%Y%m%d%H%M%S"
-            partition_str = start.strftime(dt_format) + "_" + end.strftime(dt_format)
-            return os.path.join(self._base_path, key, f"{partition_str}.pq")
+        if custom_path:
+            output_path = custom_path.format(
+                filename=context.asset_key.path[-1],
+                partition_key=context.partition_key or "default",
+            )
         else:
-            return os.path.join(self._base_path, f"{key}.pq")
+            asset_name = context.asset_key.to_string()
+            partition_key = context.partition_key or "default"
+            output_path = os.path.join(
+                self._base_path, f"{partition_key}_{asset_name}.parquet"
+            )
+
+        # Create directories for local storage
+        # If the path is s3://..., we don't create directories locally
+        if "://" not in output_path:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # Save the DataFrame to Parquet
+        row_count = len(obj)
+        obj.to_parquet(output_path, index=False)
+        context.add_output_metadata({"row_count": row_count, "path": output_path})
+        context.log.info(f"Saved Parquet file to: {output_path}")
+
+    def load_input(self, context: InputContext) -> pd.DataFrame:
+        """
+        Load a pandas DataFrame from a Parquet file.
+
+        If a custom input path is provided in the metadata (via "inpath" or any chosen metadata key),
+        it will be used. Otherwise, a default path is constructed as:
+        {base_path or s3_bucket}/{partition_key or default}_{asset_name}.parquet
+
+        Args:
+            context (InputContext): Dagster input context, including asset_key and partition_key.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        custom_path = context.metadata.get("inpath") or context.metadata.get(
+            "custom_path"
+        )
+        if custom_path:
+            input_path = custom_path.format(
+                filename=context.asset_key.path[-1],
+                partition_key=context.partition_key or "default",
+            )
+        else:
+            asset_name = context.asset_key.to_string()
+            partition_key = context.partition_key or "default"
+            input_path = os.path.join(
+                self._base_path, f"{asset_name}/{partition_key}.parquet"
+            )
+
+        # Ensure the file exists if it's a local path
+        if "://" not in input_path and not os.path.exists(input_path):
+            raise FileNotFoundError(f"Parquet file not found at: {input_path}")
+
+        context.log.info(f"Loading Parquet file from: {input_path}")
+        return pd.read_parquet(input_path)
 
 
 class LocalPartitionedParquetIOManager(PartitionedParquetIOManager):
-    base_path: str = get_system_temp_directory()
+    """
+    Local variant of the PartitionedParquetIOManager.
 
-    @property
-    def _base_path(self):
-        return self.base_path
+    Forces the base_path to be a local directory.
+    """
+
+    base_path: str = "data/parquet_files"
 
 
 class S3PartitionedParquetIOManager(PartitionedParquetIOManager):
+    """
+    S3 variant of the PartitionedParquetIOManager.
+
+    Forces the base path to point to an S3 bucket.
+    """
+
     s3_bucket: str
 
-    @property
-    def _base_path(self):
-        return "s3://" + self.s3_bucket
+
+class ParquetIOManagerConfig(Config):
+    """Pydantic config for the IO manager."""
+
+    base_path: str = Field(default_factory=get_system_temp_directory)
+    s3_bucket: Optional[str] = None
+
+
+@io_manager
+def partitioned_parquet_io_manager(init_context) -> PartitionedParquetIOManager:
+    """Dagster IO manager factory function."""
+    # Pull config from the resource config
+    config_data = init_context.resource_config  # Dict from user-provided config
+    return PartitionedParquetIOManager(**config_data)
