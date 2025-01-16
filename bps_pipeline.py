@@ -19,7 +19,7 @@ defs = Definitions(
             {"base_path": "data/parquet_files"}
         ),
         "ddb_io_manager": DuckDBPandasIOManager(
-            database="../data/my_duckdb_database.duckdb",  # required
+            database="data/my_duckdb_database.duckdb",  # required
             schema="bps_pipeline",  # optional, defaults to PUBLIC
         ),
     },
