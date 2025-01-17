@@ -20,6 +20,7 @@ from assets.bps_survey.bps_survey_helper import census_files_metadata, get_bps_h
 # FTP_DIR = "/pub/time.series/bd/"
 # LOCAL_BPS_PATH = "data/parquet_files/bps_releases"
 
+# this is duplicated in the cm_raw_data.py file
 yearly_partitions_def = TimeWindowPartitionsDefinition(
     start=datetime(2004, 1, 1), cron_schedule="0 0 1 1 *", fmt="%Y"
 )

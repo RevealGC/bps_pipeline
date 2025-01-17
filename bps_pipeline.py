@@ -1,20 +1,27 @@
 """docstring"""
 
-from dagster import Definitions, load_assets_from_modules
+from dagster import Definitions, load_assets_from_modules, EnvVar
 from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
 import assets.bps_survey.bps_survey_data as bps_module
+import assets.construction_monitor.cm_raw_data as cm_module
 from resources.parquet_io_manager import partitioned_parquet_io_manager
+from resources.cm_ftp_resource import SFTPResource
 
 # sensors
 # from sensors.release_sensor import release_sensor
 
 
 defs = Definitions(
-    assets=load_assets_from_modules([bps_module]),
+    assets=load_assets_from_modules([bps_module, cm_module]),
     # sensors=[release_sensor],
     resources={
+        "cm_ftp_resource": SFTPResource(
+            host=EnvVar("CM_FTP_ADDRESS"),
+            username=EnvVar("CM_FTP_USERNAME"),
+            password=EnvVar("CM_FTP_PASSWORD"),
+        ),
         "parquet_io_manager": partitioned_parquet_io_manager.configured(
             {"base_path": "data/parquet_files"}
         ),
