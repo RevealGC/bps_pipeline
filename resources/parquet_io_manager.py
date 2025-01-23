@@ -1,6 +1,7 @@
 """parquet IO manager for Dagster pipelines."""
 
 import os
+import re
 import pandas as pd
 from dagster import (
     ConfigurableIOManager,
@@ -12,6 +13,27 @@ from dagster import (
 from dagster._seven.temp_dir import get_system_temp_directory
 from pydantic import Field
 from typing import Optional
+
+
+def sanitize_filename(filename: str, max_length: int = 255) -> str:
+    """
+    Sanitize a string to make it safe for use as a filename.
+
+    Args:
+        filename (str): The original string to sanitize.
+        max_length (int): Maximum allowed length for the filename.
+
+    Returns:
+        str: A sanitized version of the filename.
+    """
+    # Replace invalid characters with underscores
+    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    # Replace sequences of whitespace with a single underscore
+    filename = re.sub(r"\s+", "_", filename)
+    # Remove leading/trailing spaces, dots, or underscores
+    filename = filename.strip(" ._")
+    # Truncate the filename to the max length
+    return filename[:max_length]
 
 
 class PartitionedParquetIOManager(ConfigurableIOManager):
@@ -67,7 +89,7 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
     """
 
     base_path: str = get_system_temp_directory()
-    s3_bucket: str = None
+    s3_bucket: Optional[str] = None
 
     @property
     def _base_path(self) -> str:
@@ -81,80 +103,83 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
             return f"s3://{self.s3_bucket}"
         return self.base_path
 
+    def _resolve_path(self, context, mode: str = "output") -> str:
+        """
+        Generate the file path based on the context and mode (input/output).
+
+        Args:
+            context (OutputContext | InputContext): Dagster context.
+            mode (str): Either 'output' or 'input'.
+
+        Returns:
+            str: Resolved file path.
+        """
+        asset_name = "_".join(
+            context.asset_key.path
+        )  # Convert asset key to a valid string
+
+        partition_key = sanitize_filename(context.partition_key or "default")
+
+        # custom_metadata = context.metadata.get("custom_metadata", "default_value")
+
+        # Use custom metadata path if provided
+        custom_path = (
+            context.metadata.get("outpath")
+            if mode == "output"
+            else context.upstream_output.metadata.get("path")
+        )
+        if custom_path:
+            custom_path = os.path.normpath(custom_path)
+            if not os.path.isabs(custom_path):
+                return os.path.join(
+                    self._base_path,
+                    custom_path.format(
+                        filename=asset_name,
+                        partition_key=partition_key,
+                        # custom_metadata=custom_metadata,
+                    ),
+                )
+            return custom_path.format(filename=asset_name, partition_key=partition_key)
+
+        # Default path generation
+        return os.path.join(self._base_path, f"{asset_name}/{partition_key}.parquet")
+
     def handle_output(self, context: OutputContext, obj: pd.DataFrame):
         """
         Save a pandas DataFrame as a Parquet file.
 
-        If a custom output path is provided in the metadata (via "outpath" or any chosen metadata key),
-        it will be used. Otherwise, a default path is constructed as:
-        {base_path or s3_bucket}/{partition_key or default}_{asset_name}.parquet
-
         Args:
-            context (OutputContext): Dagster output context, including asset_key and partition_key.
-            obj (pd.DataFrame): The DataFrame to save as Parquet.
+            context (OutputContext): Dagster output context.
+            obj (pd.DataFrame): DataFrame to save.
         """
+        output_path = self._resolve_path(context, mode="output")
+        context.log.info(f"Saving Parquet file to: {output_path}")
 
-        # Determine the output path
-        custom_path = context.metadata.get("outpath") or context.metadata.get(
-            "custom_path"
-        )
-        if custom_path:
-            output_path = custom_path.format(
-                filename=context.asset_key.path[-1],
-                partition_key=context.partition_key or "default",
-            )
-        else:
-            asset_name = context.asset_key.to_string()
-            partition_key = context.partition_key or "default"
-            output_path = os.path.join(
-                self._base_path, f"{partition_key}_{asset_name}.parquet"
-            )
-
-        # Create directories for local storage
-        # If the path is s3://..., we don't create directories locally
-        if "://" not in output_path:
+        if "://" not in output_path:  # Local path handling
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # Save the DataFrame to Parquet
-        row_count = len(obj)
         obj.to_parquet(output_path, index=False)
-        context.add_output_metadata({"row_count": row_count, "path": output_path})
-        context.log.info(f"Saved Parquet file to: {output_path}")
+
+        # Add output metadata
+        context.add_output_metadata({"path": output_path, "row_count": len(obj)})
+        context.log.info(f"Parquet file saved to: {output_path}")
 
     def load_input(self, context: InputContext) -> pd.DataFrame:
         """
         Load a pandas DataFrame from a Parquet file.
 
-        If a custom input path is provided in the metadata (via "inpath" or any chosen metadata key),
-        it will be used. Otherwise, a default path is constructed as:
-        {base_path or s3_bucket}/{partition_key or default}_{asset_name}.parquet
-
         Args:
-            context (InputContext): Dagster input context, including asset_key and partition_key.
+            context (InputContext): Dagster input context.
 
         Returns:
-            pd.DataFrame: The loaded DataFrame.
+            pd.DataFrame: Loaded DataFrame.
         """
-        custom_path = context.metadata.get("inpath") or context.metadata.get(
-            "custom_path"
-        )
-        if custom_path:
-            input_path = custom_path.format(
-                filename=context.asset_key.path[-1],
-                partition_key=context.partition_key or "default",
-            )
-        else:
-            asset_name = context.asset_key.to_string()
-            partition_key = context.partition_key or "default"
-            input_path = os.path.join(
-                self._base_path, f"{asset_name}/{partition_key}.parquet"
-            )
+        input_path = self._resolve_path(context, mode="input")
+        context.log.info(f"Loading Parquet file from: {input_path}")
 
-        # Ensure the file exists if it's a local path
         if "://" not in input_path and not os.path.exists(input_path):
             raise FileNotFoundError(f"Parquet file not found at: {input_path}")
 
-        context.log.info(f"Loading Parquet file from: {input_path}")
         return pd.read_parquet(input_path)
 
 
