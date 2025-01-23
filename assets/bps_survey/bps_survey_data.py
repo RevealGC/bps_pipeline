@@ -3,12 +3,12 @@
 from datetime import datetime
 from dagster import (
     AssetIn,
-    AssetKey,
+    # AssetKey,
     MetadataValue,
     Output,
     DynamicPartitionsDefinition,
     TimeWindowPartitionsDefinition,
-    BackfillPolicy,
+    # BackfillPolicy,
     AutomationCondition,
     asset,
 )
@@ -43,7 +43,6 @@ def bps_survey_releases(context):
         "West",
     ]
     all_releases = census_files_metadata(regions).sort_values(by="last_modified")
-
     context.log.info(f"Found {len(all_releases)} releases.")
 
     all_releases.to_csv("data/bps_survey_releases.csv", index=False, mode="w")
@@ -62,7 +61,6 @@ def bps_survey_releases(context):
     group_name="bps_survey",
     description="Partition mapping for BPS survey files",
     partitions_def=yearly_partitions_def,
-    backfill_policy=BackfillPolicy.single_run(),
     owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
 )
 def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None]:
@@ -114,11 +112,12 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
         "releases": AssetIn("bps_survey_releases"),
     },
     io_manager_key="parquet_io_manager",
+    # io_manager_key="ddb_io_manager",
     group_name="bps_survey",
     description="Raw BPS survey files downloaded from FTP",
-    deps=[AssetKey(["update_bps_survey_partitions"])],
+    # deps=[AssetKey(["update_bps_survey_partitions"])],
     owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
-    backfill_policy=BackfillPolicy.single_run(),
+    # backfill_policy=BackfillPolicy.single_run(),
     automation_condition=AutomationCondition.eager(),
     metadata={
         "outpath": "data/bps_raw_survey_files/{partition_key}.parquet",
