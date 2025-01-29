@@ -1,11 +1,23 @@
 # %%
 # import os
 import pandas as pd
-from dagster import MetadataValue, Output, AssetIn, AssetKey, asset, AutomationCondition
+from dagster import (
+    MetadataValue,
+    Output,
+    AssetIn,
+    AssetKey,
+    asset,
+    AutomationCondition,
+    DynamicPartitionsDefinition,
+)
 
 from assets.construction_monitor.cm_csv_files import (
     cm_permit_partitions_def,
 )
+
+evaluations_partitions_def = DynamicPartitionsDefinition(name="model_evaluations")
+
+from utilities.dagster_utils import create_dynamic_partitions
 
 
 @asset(
@@ -74,6 +86,12 @@ def aggregate_permit_models(
         .reset_index()
     )
     aggregated["partition_key"] = partition_key
+
+    create_dynamic_partitions(
+        context=context,
+        dynamic_partiton_def=evaluations_partitions_def,
+        possible_partitions=aggregated["composite_key"].unique().tolist(),
+    )
 
     return Output(
         aggregated,

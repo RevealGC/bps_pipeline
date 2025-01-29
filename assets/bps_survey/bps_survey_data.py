@@ -15,6 +15,7 @@ from dagster import (
 import pandas as pd
 
 from assets.bps_survey.bps_survey_helper import census_files_metadata, get_bps_header
+from utilities.dagster_utils import create_dynamic_partitions
 
 # FTP_HOST = "ftp.bls.gov"
 # FTP_DIR = "/pub/time.series/bd/"
@@ -76,24 +77,12 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
     selected_partitions = (
         selected_releases_data["filename"].str.replace(".txt", "").unique().tolist()
     )
-    context.log.info(f"the current year contains : {len(selected_partitions)} files")
-    existing_partition_keys = bps_releases_partitions_def.get_partition_keys(
-        dynamic_partitions_store=context.instance
+
+    new_partitions = create_dynamic_partitions(
+        context=context,
+        dynamic_partiton_def=bps_releases_partitions_def,
+        possible_partitions=selected_partitions,
     )
-    context.log.info(f"existing partitions : {len(existing_partition_keys)} files")
-
-    new_partitions = [
-        p for p in selected_partitions if p not in existing_partition_keys
-    ]
-
-    if len(new_partitions) > 0:
-        context.log.info(f"partitions to add: {len(new_partitions)} files")
-
-        for new_partition in new_partitions:
-            context.log.info(f"Adding partition for file: {new_partition}")
-            context.instance.add_dynamic_partitions(
-                bps_releases_partitions_def.name, [new_partition]
-            )
 
     return Output(
         None,
