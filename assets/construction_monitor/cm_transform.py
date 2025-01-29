@@ -72,16 +72,27 @@ def calculate_permit_month(df: pd.DataFrame):
 @asset(
     **shared_params,
     description="calculate permit month from permit date",
-    code_version="0.0.2",
+    code_version="0.0.3",
 )
 def calculate_jurisdiction(df: pd.DataFrame):
     """calculate permit jurisdiction from site jurisdiction."""
     df["jurisdiction"] = df["SITE_JURIS"].str.upper()
+    df["state"] = df["SITE_STATE"].str.upper()
+    # site state fips is not always available
+
+    df["state_fips"] = (
+        df["SITE_STATE_FIPS"].astype(str) if "SITE_STATE_FIPS" in df.columns else ""
+    )
+    df["county_fips"] = (
+        df["SITE_CNTY_FIPS"].astype(str) if "SITE_STATE_FIPS" in df.columns else ""
+    )
 
     code_version = "0.0.2"
     df["code_version_juris"] = code_version
 
-    permit_df = df[["jurisdiction", "code_version_juris"]]
+    permit_df = df[
+        ["jurisdiction", "state", "state_fips", "county_fips", "code_version_juris"]
+    ]
 
     return Output(
         permit_df,
