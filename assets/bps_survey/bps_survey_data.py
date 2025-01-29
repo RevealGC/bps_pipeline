@@ -120,7 +120,7 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
     # backfill_policy=BackfillPolicy.single_run(),
     automation_condition=AutomationCondition.eager(),
     metadata={
-        "outpath": "data/bps_raw_survey_files/{partition_key}.parquet",
+        "outpath": "bps_raw_survey_files/{partition_key}.parquet",
     },
 )
 def bps_survey_files(context, releases: pd.DataFrame) -> Output[pd.DataFrame]:

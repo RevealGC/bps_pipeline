@@ -10,7 +10,12 @@ from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
 import assets.bps_survey.bps_survey_data as bps_module
-from assets.construction_monitor import cm_csv_files, cm_transform, cm_aggregate
+from assets.construction_monitor import (
+    cm_csv_files,
+    cm_transform,
+    cm_aggregate,
+    cm_compare,
+)
 
 
 # resources
@@ -19,11 +24,13 @@ from resources.cm_ftp_resource import FTPResource
 
 # sensors
 # from sensors.release_sensor import release_sensor
-
+BASE_PATH = "data"
 
 defs = Definitions(
     assets=with_source_code_references(
-        load_assets_from_modules([bps_module, cm_csv_files, cm_transform, cm_aggregate])
+        load_assets_from_modules(
+            [bps_module, cm_csv_files, cm_transform, cm_aggregate, cm_compare]
+        )
     ),
     sensors=[cm_csv_files.file_sensor],
     resources={
@@ -33,7 +40,7 @@ defs = Definitions(
             password=EnvVar("CM_FTP_PASSWORD"),
         ),
         "parquet_io_manager": partitioned_parquet_io_manager.configured(
-            {"base_path": "data"}
+            {"base_path": BASE_PATH}
         ),
         "ddb_io_manager": DuckDBPandasIOManager(
             database="data/my_duckdb_database.duckdb",  # required
