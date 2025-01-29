@@ -41,6 +41,10 @@ def aggregate_permit_models(
     unitgroups = unitgroups.set_index(unitgroups.index)
     dwellings = dwellings.set_index(dwellings.index)
 
+    # if there are no rows in the dataframes, return empty dataframe
+    if juris.empty or months.empty or unitgroups.empty or dwellings.empty:
+        return Output(None)
+
     dwellings["permit_dwellings"] = pd.to_numeric(
         dwellings["permit_dwellings"], errors="coerce"
     )
@@ -61,10 +65,11 @@ def aggregate_permit_models(
     context.log.info(MetadataValue.md(combined.head().to_markdown()))
 
     # Aggregate: sum D values grouped by A, B, C versions and index
+    # grooup by all values except permit_dwellings
+    group_by_columns = [col for col in combined.columns if col != "permit_dwellings"]
+
     aggregated = (
-        combined.groupby(
-            ["unit_group", "permit_month", "jurisdiction", "composite_key"]
-        )
+        combined.groupby(group_by_columns)
         .agg({"permit_dwellings": "sum"})
         .reset_index()
     )
