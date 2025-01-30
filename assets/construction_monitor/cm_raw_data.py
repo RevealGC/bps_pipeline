@@ -64,7 +64,7 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
         selected_releases_data["filename"].str.replace(".txt", "").unique().tolist()
     )
     context.log.info(f"the current year contains : {len(selected_partitions)} files")
-    existing_partition_keys = bps_releases_partitions_def.get_partition_keys(
+    existing_partition_keys = cm_file_releases.get_partition_keys(
         dynamic_partitions_store=context.instance
     )
     context.log.info(f"existing partitions : {len(existing_partition_keys)} files")
@@ -79,7 +79,7 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
         for new_partition in new_partitions:
             context.log.info(f"Adding partition for file: {new_partition}")
             context.instance.add_dynamic_partitions(
-                bps_releases_partitions_def.name, [new_partition]
+                cm_file_releases.name, [new_partition]
             )
 
     return Output(
