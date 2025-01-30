@@ -155,31 +155,3 @@ def get_bps_header(path_to_file, var_column_names):
 
     # 2) For the last 12 columns, use the known consistent names
     return new_col_names
-
-
-def census_files_metadata(regions, url) -> pd.DataFrame:
-    """
-    scrape Census BPS survey pages for a list of file URLs and parse each file's metadata.
-    Return a pandas DataFrame.
-    """
-    all_txt_file_urls = pd.DataFrame()  # Initialize an empty DataFrame
-
-    for region in regions:
-        url = f"https://www2.census.gov/econ/bps/Place/{region}%20Region/"
-        files_data = get_census_metadata(url)
-
-        all_txt_file_urls = pd.concat(
-            [all_txt_file_urls, files_data], ignore_index=True
-        )
-
-    parsed_series = all_txt_file_urls["filename"].apply(parse_census_filename)
-
-    # Convert that series of dicts into a DataFrame
-    parsed_df = pd.DataFrame(parsed_series.tolist())
-
-    # Combine original DataFrame with the new columns
-    # If you want to replace the original "filename" column, just keep the new one from parsed_df
-    # Here we keep both
-    combined_df = pd.concat([all_txt_file_urls, parsed_df], axis=1)
-
-    return pd.DataFrame(combined_df)
