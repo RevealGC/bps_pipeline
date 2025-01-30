@@ -1,5 +1,4 @@
 # %%
-# import os
 import pandas as pd
 from dagster import (
     MetadataValue,
@@ -55,7 +54,7 @@ def aggregate_permit_models(
 
     # if there are no rows in the dataframes, return empty dataframe
     if juris.empty or months.empty or unitgroups.empty or dwellings.empty:
-        return Output(None)
+        return Output(pd.DataFrame(), metadata={"num_rows": 0})
 
     dwellings["permit_dwellings"] = pd.to_numeric(
         dwellings["permit_dwellings"], errors="coerce"
