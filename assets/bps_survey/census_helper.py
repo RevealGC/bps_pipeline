@@ -8,6 +8,45 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 
+def get_census_metadata(url):
+    """
+    Retrieve metadata for each file in the specified directory.
+    Name	                        Last modified	    Size
+    st01_al_place_by_county2020.txt	2023-02-17 11:26	50K
+    st02_ak_place_by_county2020.txt	2023-02-17 11:26	32K
+    st04_az_place_by_county2020.txt	2023-02-17 11:26	38K
+    st05_ar_place_by_county2020.txt	2023-02-17 11:26	50K
+    st06_ca_place_by_county2020.txt	2023-02-17 11:26	132K
+    st08_co_place_by_county2020.txt	2023-02-17 11:26	40K
+    """
+
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()  # Ensure the request was successful
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    rows = soup.find_all("tr")[3:]  # Skip the first three header rows
+
+    metadata = []
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) == 5:
+            file_name = cols[1].text.strip()
+            last_modified = cols[2].text.strip()
+            file_url = urljoin(url, file_name)
+
+            size = cols[3].text.strip()
+            metadata.append(
+                {
+                    "filename": file_name,
+                    "file_url": file_url,
+                    "last_modified": last_modified,
+                    "size": size,
+                }
+            )
+
+    return pd.DataFrame(metadata)
+
+
 def parse_census_filename(filename):
     """
     Parse a Census BPS filename (e.g. 'SO0712C.TXT' or 'SO2006A.TXT') into structured metadata.
@@ -118,71 +157,22 @@ def get_bps_header(path_to_file, var_column_names):
     return new_col_names
 
 
-def census_files_metadata(regions) -> pd.DataFrame:
+def census_files_metadata(regions, url) -> pd.DataFrame:
     """
     scrape Census BPS survey pages for a list of file URLs and parse each file's metadata.
     Return a pandas DataFrame.
     """
-
-    all_txt_file_urls = []
-    seen_filenames = set()  # To track filenames we've already added
+    all_txt_file_urls = pd.DataFrame()  # Initialize an empty DataFrame
 
     for region in regions:
         url = f"https://www2.census.gov/econ/bps/Place/{region}%20Region/"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
+        files_data = get_census_metadata(url)
 
-        soup = BeautifulSoup(response.content, "html.parser")
+        all_txt_file_urls = pd.concat(
+            [all_txt_file_urls, files_data], ignore_index=True
+        )
 
-        files_data = []
-
-        # Find all rows in the table (often the listing is in <tr> elements)
-        rows = soup.find_all("tr")
-        for row in rows:
-            # Extract <td> cells
-            tds = row.find_all("td")
-            if len(tds) < 4:
-                # Not a valid file row (maybe the header row or an empty row)
-                continue
-
-            # The <a> link is usually in the second cell
-            link = tds[1].find("a")
-            if not link:
-                continue
-
-            href = link.get("href", "")
-            if not href.endswith(".txt"):
-                # Skip rows that aren't .txt files
-                continue
-
-            # Build the absolute URL for the file
-            file_url = urljoin(url, href)
-
-            # Last modified is often in the 3rd cell, size in the 4th cell
-            last_modified = tds[2].get_text(strip=True)
-            size = tds[3].get_text(strip=True)
-
-            filename = link.text.strip()
-
-            if filename in seen_filenames:
-                continue
-
-            seen_filenames.add(filename)
-
-            # Gather data into a dict
-            files_data.append(
-                {
-                    "filename": filename,
-                    "file_url": file_url,
-                    "last_modified": last_modified,
-                    "size": size,
-                }
-            )
-
-        all_txt_file_urls.extend(files_data)
-
-    df = pd.DataFrame(all_txt_file_urls)
-    parsed_series = df["filename"].apply(parse_census_filename)
+    parsed_series = all_txt_file_urls["filename"].apply(parse_census_filename)
 
     # Convert that series of dicts into a DataFrame
     parsed_df = pd.DataFrame(parsed_series.tolist())
@@ -190,6 +180,6 @@ def census_files_metadata(regions) -> pd.DataFrame:
     # Combine original DataFrame with the new columns
     # If you want to replace the original "filename" column, just keep the new one from parsed_df
     # Here we keep both
-    combined_df = pd.concat([df, parsed_df], axis=1)
+    combined_df = pd.concat([all_txt_file_urls, parsed_df], axis=1)
 
     return pd.DataFrame(combined_df)
