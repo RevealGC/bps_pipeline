@@ -17,9 +17,6 @@ import pandas as pd
 import assets.bps_survey.census_helper as ch
 from utilities.dagster_utils import create_dynamic_partitions
 
-# FTP_HOST = "ftp.bls.gov"
-# FTP_DIR = "/pub/time.series/bd/"
-# LOCAL_BPS_PATH = "data/parquet_files/bps_releases"
 
 # this is duplicated in the cm_raw_data.py file
 yearly_partitions_def = TimeWindowPartitionsDefinition(
@@ -28,64 +25,53 @@ yearly_partitions_def = TimeWindowPartitionsDefinition(
 
 bps_releases_partitions_def = DynamicPartitionsDefinition(name="bps_releases")
 
+shared_params = {
+    "io_manager_key": "parquet_io_manager",
+    "group_name": "bps_survey",
+    "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
+    "automation_condition": AutomationCondition.eager(),
+}
+
 
 @asset(
-    group_name="bps_survey",
+    **shared_params,
+    partitions_def=yearly_partitions_def,
     description="List of BPS survey files available on bps FTP server",
-    owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
 )
 def bps_survey_releases(context):
     """Get list of BPS survey files from FTP server."""
 
-    all_txt_file_urls = pd.DataFrame()  # Initialize an empty DataFrame
+    partition_key = int(context.partition_key)
+    url_base = "https://www2.census.gov/econ/bps/Place/"
     regions = [
         "Midwest",
         "Northeast",
         "South",
         "West",
     ]
-    url = "https://www2.census.gov/econ/bps/Place/"
-
-    all_txt_file_urls = pd.concat(
-        [ch.get_census_metadata(f"{url}{region}%20Region/") for region in regions],
-        ignore_index=True,
-    )
-    all_releases = all_txt_file_urls.assign(
-        **pd.DataFrame(
-            all_txt_file_urls["filename"].apply(ch.parse_census_filename).tolist()
+    context.log.info(f"the current partiton year : {partition_key}")
+    context.log.info(f"retreiving data from {url_base}")
+    all_releases = (
+        pd.concat(
+            [
+                ch.get_census_metadata(f"{url_base}{region}%20Region/")
+                for region in regions
+            ],
+            ignore_index=True,
         )
+        .assign(
+            **pd.DataFrame(
+                lambda df: df["filename"].apply(ch.parse_census_filename).tolist()
+            )
+        )
+        .sort_values(by="last_modified")
     )
-    all_releases = all_releases.sort_values(by="last_modified")
 
     context.log.info(f"Found {len(all_releases)} releases.")
 
-    all_releases.to_csv("data/bps_survey_releases.csv", index=False, mode="w")
-    # return all_releases.sort_values(by="last_modified")
-    return Output(
-        all_releases,
-        metadata={
-            "num_files": len(all_releases),
-            "preview": MetadataValue.md(all_releases.tail(20).to_markdown()),
-        },
+    selected_releases_data = all_releases.query(
+        "suffix == 'C' and year == @partition_key"
     )
-
-
-@asset(
-    ins={"releases": AssetIn("bps_survey_releases")},
-    group_name="bps_survey",
-    description="Partition mapping for BPS survey files",
-    partitions_def=yearly_partitions_def,
-    owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
-)
-def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None]:
-    """Update dynamic partitions based on new BPS survey releases."""
-    releases_data = releases[releases["suffix"] == "C"]
-
-    # Get the most recent release year
-    partition_key = context.partition_key
-    context.log.info(f"the current partiton year : {partition_key}")
-
-    selected_releases_data = releases_data[releases_data["year"] == int(partition_key)]
 
     selected_partitions = (
         selected_releases_data["filename"].str.replace(".txt", "").unique().tolist()
@@ -96,34 +82,31 @@ def update_bps_survey_partitions(context, releases: pd.DataFrame) -> Output[None
         dynamic_partiton_def=bps_releases_partitions_def,
         possible_partitions=selected_partitions,
     )
-
+    # all_releases.to_csv("data/bps_survey_releases.csv", index=False, mode="w")
+    # return all_releases.sort_values(by="last_modified")
     return Output(
-        None,
+        selected_releases_data,
         metadata={
-            "num_partitions": len(new_partitions),
+            "num_files": len(all_releases),
+            # "preview": MetadataValue.md(new_partitions.(20).to_markdown()),
             "preview": MetadataValue.md(
-                pd.DataFrame({"partition_key": new_partitions}).head().to_markdown()
+                pd.DataFrame(new_partitions).head().to_markdown()
             ),
+            # ),
         },
     )
 
 
 @asset(
+    **shared_params,
     partitions_def=bps_releases_partitions_def,
     ins={
         "releases": AssetIn("bps_survey_releases"),
     },
-    io_manager_key="parquet_io_manager",
-    # io_manager_key="ddb_io_manager",
-    group_name="bps_survey",
     description="Raw BPS survey files downloaded from FTP",
-    # deps=[AssetKey(["update_bps_survey_partitions"])],
-    owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
-    # backfill_policy=BackfillPolicy.single_run(),
-    automation_condition=AutomationCondition.eager(),
-    metadata={
-        "outpath": "bps_raw_survey_files/{partition_key}.parquet",
-    },
+    # metadata={
+    #     "outpath": "bps_raw_survey_files/{partition_key}.parquet",
+    # },
 )
 def bps_survey_files(context, releases: pd.DataFrame) -> Output[pd.DataFrame]:
     """Download and store BPS survey files as parquet."""
