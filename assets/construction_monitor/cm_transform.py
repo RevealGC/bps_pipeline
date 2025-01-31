@@ -11,8 +11,17 @@ from dagster import (
 )
 
 from assets.construction_monitor.cm_csv_files import (
-    cm_permit_partitions_def,
+    cm_permit_files_partitions,
 )
+
+shared_params = {
+    "partitions_def": cm_permit_files_partitions,
+    "ins": {"df": AssetIn(AssetKey(["cm_permit_files"]))},
+    "io_manager_key": "parquet_io_manager",
+    "group_name": "cm_permits",
+    "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
+    "automation_condition": AutomationCondition.eager(),
+}
 
 
 def assign_unit_group(units):
@@ -29,16 +38,6 @@ def assign_unit_group(units):
         return "0"
     else:
         return "unknown"  # For unexpected values like 0 or negative
-
-
-shared_params = {
-    "partitions_def": cm_permit_partitions_def,
-    "ins": {"df": AssetIn(AssetKey(["cm_permit_files"]))},
-    "io_manager_key": "parquet_io_manager",
-    "group_name": "cm_permits",
-    "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
-    "automation_condition": AutomationCondition.eager(),
-}
 
 
 # calculate_permit_month.py

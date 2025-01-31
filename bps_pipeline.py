@@ -10,6 +10,7 @@ from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
 import assets.bps_survey.bps_survey_data as bps_module
+from sensors.cm_files_sensor import file_sensor
 from assets.construction_monitor import (
     cm_csv_files,
     cm_transform,
@@ -32,7 +33,7 @@ defs = Definitions(
             [bps_module, cm_csv_files, cm_transform, cm_aggregate, cm_compare]
         )
     ),
-    sensors=[cm_csv_files.file_sensor],
+    sensors=[file_sensor],
     resources={
         "cm_ftp_resource": FTPResource(
             host=EnvVar("CM_FTP_ADDRESS"),

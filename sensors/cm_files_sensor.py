@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import dagster as dg
 
-from assets.construction_monitor.cm_csv_files import cm_permit_partitions_def
+from assets.construction_monitor.cm_csv_files import cm_permit_files_partitions
 
 
 @dg.sensor(asset_selection=dg.AssetSelection.assets(dg.AssetKey("cm_permit_files")))
@@ -22,7 +22,7 @@ def file_sensor(context):
 
         for file_path in dir_path.glob("*.csv"):
             if not context.instance.has_dynamic_partition(
-                cm_permit_partitions_def.name, str(file_path)
+                cm_permit_files_partitions.name, str(file_path)
             ):
                 new_files.append(str(file_path))
 
@@ -31,6 +31,8 @@ def file_sensor(context):
     return dg.SensorResult(
         run_requests=[dg.RunRequest(partition_key=filename) for filename in new_files],
         dynamic_partitions_requests=(
-            [cm_permit_partitions_def.build_add_request(new_files)] if new_files else []
+            [cm_permit_files_partitions.build_add_request(new_files)]
+            if new_files
+            else []
         ),
     )

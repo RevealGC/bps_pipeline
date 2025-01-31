@@ -1,6 +1,13 @@
+"""
+dagster_utils.py
+"""
+
+# %%
 import os
+from typing import Optional
 from dagster import (
     DynamicPartitionsDefinition,
+    InitResourceContext,
     AssetExecutionContext,
     EventRecordsFilter,
     DagsterEventType,
@@ -73,3 +80,11 @@ def get_outpath(context: AssetExecutionContext, asset_key: AssetKey) -> str:
     context.log.info(f"Wildcard path: {wildcard_path}")
 
     return wildcard_path
+
+
+def log(statement: str, context: Optional[InitResourceContext] = None):
+    """Logs a statement using Dagster context, falling back to print if unavailable."""
+    if context and getattr(context, "log", None):
+        context.log.info(statement)
+    else:
+        print(statement)

@@ -11,7 +11,7 @@ from dagster import (
 )
 
 from assets.construction_monitor.cm_csv_files import (
-    cm_permit_partitions_def,
+    cm_permit_files_partitions,
 )
 
 evaluations_partitions_def = DynamicPartitionsDefinition(name="model_evaluations")
@@ -29,7 +29,7 @@ from utilities.dagster_utils import create_dynamic_partitions
     },
     group_name="cm_permits",
     description="Read raw permit data from a CSV file.",
-    partitions_def=cm_permit_partitions_def,
+    partitions_def=cm_permit_files_partitions,
     automation_condition=AutomationCondition.eager(),
 )
 def aggregate_permit_models(
