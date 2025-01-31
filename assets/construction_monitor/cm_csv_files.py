@@ -1,40 +1,22 @@
 # %%
 import os
 import pandas as pd
+from pathlib import Path
+
+# from datetime import datetime
 from dagster import (
-    AssetSelection,
-    DynamicPartitionsDefinition,
     MetadataValue,
     Output,
-    SensorResult,
     RunRequest,
+    DynamicPartitionsDefinition,
     asset,
     sensor,
+    SensorResult,
+    AssetSelection,
 )
 
-# partitoin defintion
+# cm_permit_csv_partitions_def = DynamicPartitionsDefinition(name="cm_csv_files")
 cm_permit_partitions_def = DynamicPartitionsDefinition(name="cm_files")
-
-
-def get_files_metadata(folder_path: str) -> pd.DataFrame:
-    """Retrieve filenames and metadata of all files in a specific folder."""
-    files_metadata = []
-
-    for root, _, files in os.walk(folder_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            file_info = os.stat(file_path)
-            files_metadata.append(
-                {
-                    "partition": file.replace(".csv", ""),
-                    "filename": file,
-                    "file_path": file_path,
-                    "size": file_info.st_size,
-                    "last_modified": pd.to_datetime(file_info.st_mtime, unit="s"),
-                }
-            )
-
-    return pd.DataFrame(files_metadata)
 
 
 @asset(
@@ -57,9 +39,12 @@ def cm_permit_files(context) -> Output[pd.DataFrame]:
         permit_df,
         # None,
         metadata={
+            "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
             "preview": MetadataValue.md(permit_df.head().to_markdown()),
-            "inferred_schema": MetadataValue.md(permit_df.dtypes.to_markdown()),
+            "inferred_schema": MetadataValue.md(
+                str(permit_df.dtypes.to_frame().to_markdown())
+            ),
         },
     )
 
@@ -71,17 +56,19 @@ def file_sensor(context):
     new_files = []
 
     for directory in directories:
-        if os.path.exists(directory):  # Ensure the directory exists
-            # Check for files that are not already registered as dynamic partitions
-            new_files.extend(
-                f"{directory}/{filename}"
-                for filename in os.listdir(directory)
-                if not context.instance.has_dynamic_partition(
-                    cm_permit_partitions_def.name, f"{directory}/{filename}"
-                )
-            )
-        else:
+        dir_path = Path(directory)
+
+        if not dir_path.exists():
             context.log.warning(f"Directory does not exist: {directory}")
+            continue
+
+        for file_path in dir_path.glob("*.csv"):
+            if not context.instance.has_dynamic_partition(
+                cm_permit_partitions_def.name, str(file_path)
+            ):
+                new_files.append(str(file_path))
+
+    context.log.info(f"Found {len(new_files)} new files: {new_files}")
 
     return SensorResult(
         run_requests=[RunRequest(partition_key=filename) for filename in new_files],
