@@ -155,3 +155,20 @@ def bps_survey_files(context, releases: pd.DataFrame) -> Output[pd.DataFrame]:
             "rows_downloaded": file_rows,
         },
     )
+
+
+# # %%
+# def enriched_bps_survey_data(
+#     context, bps_survey_files: pd.DataFrame
+# ) -> Output[pd.DataFrame]:
+#     """Aggregate BPS survey data."""
+#     df
+#     groups = ["1_unit", "2_units", "3_4_units", "5+_units"]
+
+#     df = df[df["unit_group"].isin(groups)]
+#     df = (
+#         df.groupby(["permit_month", "jurisdiction", "unit_group"])
+#         .agg(permit_dwellings=("permit_dwellings", "sum"))
+#         .reset_index()
+#     )
+#     return df

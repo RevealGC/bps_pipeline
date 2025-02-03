@@ -15,7 +15,6 @@ from assets.construction_monitor import (
     cm_csv_files,
     cm_transform,
     cm_aggregate,
-    cm_compare,
 )
 
 
@@ -29,9 +28,7 @@ BASE_PATH = "data"
 
 defs = Definitions(
     assets=with_source_code_references(
-        load_assets_from_modules(
-            [bps_module, cm_csv_files, cm_transform, cm_aggregate, cm_compare]
-        )
+        load_assets_from_modules([bps_module, cm_csv_files, cm_transform, cm_aggregate])
     ),
     sensors=[file_sensor],
     resources={
