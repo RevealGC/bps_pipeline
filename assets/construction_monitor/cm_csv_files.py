@@ -1,19 +1,20 @@
 """cm_csv_files.py"""
 
+import os
 import re
+from typing import List, Generator
 import pandas as pd
 import dagster as dg
-from typing import List
 from utilities.dagster_utils import create_dynamic_partitions
 
-cm_permit_files_partitions = dg.DynamicPartitionsDefinition(name="cm_files")
+cm_permit_files_partitions = dg.DynamicPartitionsDefinition(name="cm_ftp_files")
+cm_ftp_files_partitions = dg.DynamicPartitionsDefinition(name="cm_files")
 cm_imputation_files_partitions = dg.DynamicPartitionsDefinition(name="imputation_files")
 cm_issued_date_files_partitions = dg.DynamicPartitionsDefinition(
     name="issued_date_files"
 )
 
 shared_params = {
-    "io_manager_key": "parquet_io_manager",
     "group_name": "cm_permits",
     "automation_condition": dg.AutomationCondition.eager(),
     "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
@@ -21,28 +22,28 @@ shared_params = {
 
 
 @dg.multi_asset(
-    **shared_params,
     outs={
-        "cm_permit_files": dg.AssetOut(
-            partitions_def=cm_permit_files_partitions,
+        "cm_ftp_files": dg.AssetOut(
+            **shared_params,
             metadata={"description": "raw permit files"},
         ),
         "cm_imputation_files": dg.AssetOut(
-            partitions_def=cm_imputation_files_partitions,
+            **shared_params,
             metadata={"description": "Permit imputation changes"},
             is_required=False,
         ),
         "cm_issued_date_files": dg.AssetOut(
-            partitions_def=cm_issued_date_files_partitions,
+            **shared_params,
             metadata={"description": "Issued dates files"},
             is_required=False,
         ),
     },
     required_resource_keys={"cm_ftp_resource"},
+    description="Fetch files from FTP, categorize them into permits, imputation, and issued-date files, and create dynamic partitions for each type.",
 )
 def cm_file_releases(
     context,
-) -> dg.Generator[dg.Output[List[str]]]:
+) -> Generator[dg.Output[List[str]], None, None]:
     """
     Fetch files from FTP, categorize them into core, imputation, and issued-date files,
     and create dynamic partitions for each type.
@@ -53,9 +54,9 @@ def cm_file_releases(
     context.log.info(f"Found {len(all_files)} releases on ftp.")
 
     partition_mapping = {
-        "cm_permit_files": (
+        "cm_ftp_files": (
             re.compile(r"^reveal-gc-\d{4}-\d+\.csv$"),
-            cm_permit_files_partitions,
+            cm_ftp_files_partitions,
         ),
         "cm_imputation_files": (
             re.compile(r"^reveal-gc-permit-imputations-\d{4}-\d+\.csv$"),
@@ -67,7 +68,7 @@ def cm_file_releases(
         ),
     }
 
-    for asset_name in context.selected_output_names():
+    for asset_name in context.selected_output_names:
         if asset_name in partition_mapping:
             pattern, partition_def = partition_mapping[asset_name]
             matching_files = [f for f in all_files if pattern.match(f)]
@@ -79,8 +80,10 @@ def cm_file_releases(
                 dynamic_partiton_def=partition_def,
                 possible_partitions=matching_files,
             )
+
             yield dg.Output(
                 new_partitions,
+                output_name=asset_name,
                 metadata={
                     "num_files": len(matching_files),
                     "preview": dg.MetadataValue.md(
@@ -92,13 +95,49 @@ def cm_file_releases(
             context.log.info(f"Skipping {asset_name}.")
 
 
-# @dg.asset()
-# def cm_ftp_files(context) -> dg.Resource:
+@dg.asset(
+    **shared_params,
+    required_resource_keys={"cm_ftp_resource"},
+    partitions_def=cm_ftp_files_partitions,
+    deps={"cm_ftp_files"},
+    description="download raw permit files from ftp.",
+)
+def cm_ftp_csv_files(context) -> dg.Output[None]:
+    """
+    Download raw permit files from FTP and save locally.
+
+    Returns:
+        None: Saves the files to disk.
+    """
+    directory = "data/permit_data/"
+    partition_key = context.partition_key
+    cm_ftp = context.resources.cm_ftp_resource
+
+    results = cm_ftp.download_files(partition_key)
+    if not results:
+        context.log.warning(f"No files found for partition {partition_key}.")
+        return dg.Output(None, metadata={"num_files": 0})
+    filepath = os.path.join(directory, f"{partition_key}.csv")
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pd.DataFrame(results).to_csv(filepath, index=False)
+    context.log.info(f"Saved permit data to {filepath}")
+
+    return dg.Output(
+        None,
+        # results,
+        metadata={
+            "num_files": len(results),
+            "preview": dg.MetadataValue.md(pd.DataFrame(results).to_markdown()),
+        },
+    )
+
+
 #     return context.resources.cm_ftp_resource
 
 
 @dg.asset(
     **shared_params,
+    io_manager_key="parquet_io_manager",
     partitions_def=cm_permit_files_partitions,
     description="Read raw permit data from a CSV file.",
 )
