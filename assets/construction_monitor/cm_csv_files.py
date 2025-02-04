@@ -111,28 +111,34 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
     """
     directory = "data/permit_data/"
     partition_key = context.partition_key
-    cm_ftp = context.resources.cm_ftp_resource
+    cm_ftp_resource = context.resources.cm_ftp_resource
+    cm_ftp = cm_ftp_resource.create_client()
 
-    results = cm_ftp.download_files(partition_key)
-    if not results:
+    file_stream = cm_ftp.download_file(partition_key)
+    context.log.info(f"Downloaded permit data for {partition_key}.")
+
+    result = pd.read_csv(file_stream, encoding="ISO-8859-1", dtype=str)
+    context.log.info(f"Parsed {partition_key} into csv.")
+
+    if result.empty:
         context.log.warning(f"No files found for partition {partition_key}.")
-        return dg.Output(None, metadata={"num_files": 0})
-    filepath = os.path.join(directory, f"{partition_key}.csv")
+        return dg.Output(None, metadata={"num_records": 0})
+
+    # Save the files to disk if it contains records
+    filepath = os.path.join(directory, f"{partition_key}")
+    context.log.info(f"Saving permit data to {filepath}.")
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    pd.DataFrame(results).to_csv(filepath, index=False)
+    result.to_csv(filepath, index=False)
     context.log.info(f"Saved permit data to {filepath}")
 
     return dg.Output(
         None,
-        # results,
         metadata={
-            "num_files": len(results),
-            "preview": dg.MetadataValue.md(pd.DataFrame(results).to_markdown()),
+            "file_path": filepath,
+            "records": len(result),
+            "preview": dg.MetadataValue.md(result.head().to_markdown()),
         },
     )
-
-
-#     return context.resources.cm_ftp_resource
 
 
 @dg.asset(
