@@ -4,7 +4,6 @@ from datetime import datetime
 from urllib.parse import urljoin
 
 import requests
-import pandas as pd
 from bs4 import BeautifulSoup
 
 
@@ -44,7 +43,7 @@ def get_census_metadata(url):
                 }
             )
 
-    return pd.DataFrame(metadata)
+    return metadata
 
 
 def parse_census_filename(filename):
