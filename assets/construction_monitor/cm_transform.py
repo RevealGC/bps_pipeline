@@ -1,14 +1,7 @@
 """cm_transform.py """
 
 import pandas as pd
-from dagster import (
-    Output,
-    AssetIn,
-    AssetKey,
-    MetadataValue,
-    AutomationCondition,
-    asset,
-)
+import dagster as dg
 
 from assets.construction_monitor.cm_helper import assign_unit_group
 from assets.construction_monitor.cm_csv_files import (
@@ -17,17 +10,17 @@ from assets.construction_monitor.cm_csv_files import (
 
 shared_params = {
     "partitions_def": cm_permit_files_partitions,
-    "ins": {"df": AssetIn(AssetKey(["cm_permit_files"]))},
+    "ins": {"df": dg.AssetIn(dg.AssetKey(["cm_permit_files"]))},
     "io_manager_key": "parquet_io_manager",
     "group_name": "cm_permits",
     "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
-    "automation_condition": AutomationCondition.eager(),
+    "automation_condition": dg.AutomationCondition.eager(),
 }
 
 
 # calculate_permit_month.py
 # asset for permit month assignment
-@asset(
+@dg.asset(
     **shared_params,
     description="calculate permit month from permit date",
     code_version="0.0.2",
@@ -41,19 +34,19 @@ def calculate_permit_month(df: pd.DataFrame):
 
     permit_df = df[["permit_month", "code_version_months"]]
 
-    return Output(
+    return dg.Output(
         permit_df,
         metadata={
             "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
-            "preview": MetadataValue.md(permit_df.head().to_markdown()),
+            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
         },
     )
 
 
 # calculate_jurisdiction.py
 # asset for jurisdiction assignment
-@asset(
+@dg.asset(
     **shared_params,
     description="calculate permit month from permit date",
     code_version="0.0.3",
@@ -78,19 +71,19 @@ def calculate_jurisdiction(df: pd.DataFrame):
         ["jurisdiction", "state", "state_fips", "county_fips", "code_version_juris"]
     ]
 
-    return Output(
+    return dg.Output(
         permit_df,
         metadata={
             "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
-            "preview": MetadataValue.md(permit_df.head().to_markdown()),
+            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
         },
     )
 
 
 # calculate_unit_group.py
 # asset for unit_group assignment
-@asset(
+@dg.asset(
     **shared_params,
     description="calculate permit unit group",
     code_version="0.0.2",
@@ -105,18 +98,18 @@ def calculate_unit_group(df: pd.DataFrame):
 
     permit_df = df[["unit_group", "code_version_unitgroups"]]
 
-    return Output(
+    return dg.Output(
         permit_df,
         metadata={
             "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
-            "preview": MetadataValue.md(permit_df.head().to_markdown()),
+            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
         },
     )
 
 
 # asset for dwellings imputation
-@asset(
+@dg.asset(
     **shared_params,
     description="calculate permit dwellings",
     code_version="0.0.2",
@@ -129,11 +122,11 @@ def impute_dwellings(df: pd.DataFrame):
 
     permit_df = df[["permit_dwellings", "code_version_dwellings"]]
 
-    return Output(
+    return dg.Output(
         permit_df,
         metadata={
             "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
-            "preview": MetadataValue.md(permit_df.head().to_markdown()),
+            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
         },
     )

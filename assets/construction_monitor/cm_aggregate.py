@@ -1,36 +1,27 @@
 # %%
 import pandas as pd
-from dagster import (
-    MetadataValue,
-    Output,
-    AssetIn,
-    AssetKey,
-    asset,
-    AutomationCondition,
-    DynamicPartitionsDefinition,
-)
+import dagster as dg
 
 from assets.construction_monitor.cm_csv_files import (
     cm_permit_files_partitions,
 )
-
-evaluations_partitions_def = DynamicPartitionsDefinition(name="model_evaluations")
-
 from utilities.dagster_utils import create_dynamic_partitions
 
+evaluations_partitions_def = dg.DynamicPartitionsDefinition(name="model_evaluations")
 
-@asset(
+
+@dg.asset(
     io_manager_key="parquet_io_manager",
     ins={
-        "juris": AssetIn(AssetKey(["calculate_jurisdiction"])),
-        "months": AssetIn(AssetKey(["calculate_permit_month"])),
-        "unitgroups": AssetIn(AssetKey(["calculate_unit_group"])),
-        "dwellings": AssetIn(AssetKey(["impute_dwellings"])),
+        "juris": dg.AssetIn(dg.AssetKey(["calculate_jurisdiction"])),
+        "months": dg.AssetIn(dg.AssetKey(["calculate_permit_month"])),
+        "unitgroups": dg.AssetIn(dg.AssetKey(["calculate_unit_group"])),
+        "dwellings": dg.AssetIn(dg.AssetKey(["impute_dwellings"])),
     },
     group_name="cm_permits",
     description="Read raw permit data from a CSV file.",
     partitions_def=cm_permit_files_partitions,
-    automation_condition=AutomationCondition.eager(),
+    automation_condition=dg.AutomationCondition.eager(),
 )
 def aggregate_permit_models(
     context,
@@ -38,7 +29,7 @@ def aggregate_permit_models(
     months: pd.DataFrame,
     unitgroups: pd.DataFrame,
     dwellings: pd.DataFrame,
-) -> Output[pd.DataFrame]:
+) -> dg.Output[pd.DataFrame]:
     """
     load and join model outputs from:
         - calculate_jurisdiction,
@@ -54,7 +45,7 @@ def aggregate_permit_models(
 
     # if there are no rows in the dataframes, return empty dataframe
     if juris.empty or months.empty or unitgroups.empty or dwellings.empty:
-        return Output(pd.DataFrame(), metadata={"num_rows": 0})
+        return dg.Output(pd.DataFrame(), metadata={"num_rows": 0})
 
     dwellings["permit_dwellings"] = pd.to_numeric(
         dwellings["permit_dwellings"], errors="coerce"
@@ -73,7 +64,7 @@ def aggregate_permit_models(
         + "_"
         + combined["code_version_dwellings"]
     )
-    context.log.info(MetadataValue.md(combined.head().to_markdown()))
+    context.log.info(dg.MetadataValue.md(combined.head().to_markdown()))
 
     # Aggregate: sum D values grouped by A, B, C versions and index
     # grooup by all values except permit_dwellings
@@ -92,11 +83,11 @@ def aggregate_permit_models(
         possible_partitions=aggregated["composite_key"].unique().tolist(),
     )
 
-    return Output(
+    return dg.Output(
         aggregated,
         metadata={
             "num_columns": aggregated.shape[1],
             "num_rows": aggregated.shape[0],
-            "preview": MetadataValue.md(aggregated.head().to_markdown()),
+            "preview": dg.MetadataValue.md(aggregated.head().to_markdown()),
         },
     )
