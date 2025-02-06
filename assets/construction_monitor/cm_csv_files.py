@@ -48,7 +48,9 @@ def cm_file_releases(
     Fetch files from FTP, categorize them into core, imputation, and issued-date files,
     and create dynamic partitions for each type.
     """
-    cm_ftp = context.resources.cm_ftp_resource
+    cm_ftp_resource = context.resources.cm_ftp_resource
+    cm_ftp = cm_ftp_resource.create_client()
+
     all_files = cm_ftp.list_files()
 
     context.log.info(f"Found {len(all_files)} releases on ftp.")
@@ -109,7 +111,7 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
     Returns:
         None: Saves the files to disk.
     """
-    directory = dg.EnvVar("PERMIT_DATA_DIRECTORY")
+    directory = dg.EnvVar("PERMIT_DATA_DIRECTORY").get_value()
     partition_key = context.partition_key
     cm_ftp_resource = context.resources.cm_ftp_resource
     cm_ftp = cm_ftp_resource.create_client()
