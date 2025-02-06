@@ -1,5 +1,6 @@
 """docstring"""
 
+from os import getenv
 from pathlib import Path
 import dagster as dg
 from dagster import EnvVar
@@ -21,7 +22,7 @@ from resources.cm_ftp_resource import FTPResource
 
 # sensors
 # from sensors.release_sensor import release_sensor
-BASE_PATH = Path(EnvVar("BASE_PATH")).expanduser().resolve()
+BASE_PATH = Path(EnvVar("BASE_PATH").get_value()).expanduser().resolve()
 
 defs = dg.Definitions(
     assets=dg.with_source_code_references(
