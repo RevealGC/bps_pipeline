@@ -15,7 +15,7 @@ cm_issued_date_files_partitions = dg.DynamicPartitionsDefinition(
 )
 
 shared_params = {
-    "group_name": "cm_permits",
+    "group_name": "cm_raw_permits",
     "automation_condition": dg.AutomationCondition.eager(),
     "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
 }
@@ -146,6 +146,7 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
 @dg.asset(
     **shared_params,
     io_manager_key="parquet_io_manager",
+    deps=[dg.AssetKey("cm_ftp_csv_files")],
     partitions_def=cm_permit_files_partitions,
     description="Read raw permit data from a CSV file.",
 )
