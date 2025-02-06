@@ -70,7 +70,7 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
         asset_name = "_".join(
             context.asset_key.path
         )  # Convert asset key to a valid filename
-        partition_key = sanitize_filename(context.partition_key or "default")
+        partition_key = sanitize_filename(context.partition_key or "")
 
         # Use custom metadata path if provided
         custom_path = (
@@ -96,7 +96,9 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
             return custom_path.format(filename=asset_name, partition_key=partition_key)
 
         # Default file path
-        return f"{self._base_path}/{partition_key}/{asset_name}.{mode}.parquet"
+        return os.path.join(
+            self._base_path, sanitize_filename(asset_name), f"{partition_key}.parquet"
+        )
 
     def handle_output(self, context: OutputContext, obj: pd.DataFrame):
         """
@@ -146,12 +148,6 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
             raise FileNotFoundError(f"Parquet file not found: {input_path}")
 
         return pd.read_parquet(input_path)
-
-
-class LocalPartitionedParquetIOManager(PartitionedParquetIOManager):
-    """Forces base_path to be a local directory."""
-
-    base_path: str = "data/parquet_files"
 
 
 class S3PartitionedParquetIOManager(PartitionedParquetIOManager):

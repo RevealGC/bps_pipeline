@@ -18,7 +18,17 @@ cd bps_pipeline
 ```
 pip install -r requirements.txt
 ```
-3. Run Dagster as a Module:
+3. set env variables
+create a .env folder
+```
+# Linux/MacOS
+echo -e "BASE_PATH=.data/\nPERMIT_DATA_DIRECTORY=.data/permit_data/" > .env
+
+# windows
+Set-Content -Path .env -Value "BASE_PATH=.data/`nPERMIT_DATA_DIRECTORY=.data/permit_data/"
+
+```
+4. Run Dagster as a Module:
 ```
 dagster dev -m bps_pipeline
 ```
@@ -30,4 +40,3 @@ bps_pipeline.py: The main pipeline definition file. this is the intended entrypo
  - assets/: Contains the asset definitions for the pipeline.
  - resources/: Contains resource definitions, such as the Parquet IO manager.
  - sensors/: Contains sensor definitions (if any).
- - data/: by default all files will be downloaded into subfolders within this repo. 

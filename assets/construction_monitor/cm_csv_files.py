@@ -109,7 +109,7 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
     Returns:
         None: Saves the files to disk.
     """
-    directory = "data/permit_data/"
+    directory = dg.EnvVar("PERMIT_DATA_DIRECTORY")
     partition_key = context.partition_key
     cm_ftp_resource = context.resources.cm_ftp_resource
     cm_ftp = cm_ftp_resource.create_client()

@@ -1,11 +1,8 @@
 """docstring"""
 
-from dagster import (
-    Definitions,
-    EnvVar,
-    load_assets_from_modules,
-    with_source_code_references,
-)
+from pathlib import Path
+import dagster as dg
+from dagster import EnvVar
 from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
@@ -24,11 +21,13 @@ from resources.cm_ftp_resource import FTPResource
 
 # sensors
 # from sensors.release_sensor import release_sensor
-BASE_PATH = "data"
+BASE_PATH = Path(EnvVar("BASE_PATH")).expanduser().resolve()
 
-defs = Definitions(
-    assets=with_source_code_references(
-        load_assets_from_modules([bps_module, cm_csv_files, cm_transform, cm_aggregate])
+defs = dg.Definitions(
+    assets=dg.with_source_code_references(
+        dg.load_assets_from_modules(
+            [bps_module, cm_csv_files, cm_transform, cm_aggregate]
+        )
     ),
     sensors=[file_sensor],
     resources={
@@ -38,10 +37,10 @@ defs = Definitions(
             password=EnvVar("CM_FTP_PASSWORD"),
         ),
         "parquet_io_manager": partitioned_parquet_io_manager.configured(
-            {"base_path": BASE_PATH}
+            {"base_path": str(BASE_PATH)}
         ),
         "ddb_io_manager": DuckDBPandasIOManager(
-            database="data/my_duckdb_database.duckdb",  # required
+            database=str(BASE_PATH.joinpath("my_duckdb_database.duckdb")),  # required
             schema="bps_pipeline",  # optional, defaults to PUBLIC
         ),
     },

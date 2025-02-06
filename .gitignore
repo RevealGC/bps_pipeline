@@ -163,5 +163,6 @@ cython_debug/
 
 
 # ignore data and dagster folders
-data
+.data
 tmp*
+.dagster*
