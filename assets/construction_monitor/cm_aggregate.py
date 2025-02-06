@@ -100,29 +100,3 @@ def aggregate_permit_models(
             "preview": MetadataValue.md(aggregated.head().to_markdown()),
         },
     )
-
-
-# # aggregate_permit_data.py
-# reduced_df = permit_data.copy()[["PMT_DATE", "SITE_JURIS", "PMT_UNITS"]]
-# calculate_permit_month(reduced_df)
-# calculate_jurisdiction(reduced_df)
-# calculate_unit_group(reduced_df)
-# impute_dwellings(reduced_df)
-# print(reduced_df)
-
-
-# # %%
-# def aggregate_permit_data(dataframe):
-#     df = dataframe.copy()
-#     groups = ["1_unit", "2_units", "3_4_units", "5+_units"]
-
-#     df = df[df["unit_group"].isin(groups)]
-#     df = (
-#         df.groupby(["permit_month", "jurisdiction", "unit_group"])
-#         .agg(permit_dwellings=("permit_dwellings", "sum"))
-#         .reset_index()
-#     )
-#     return df
-
-
-# aggregate_permit_data(reduced_df)
