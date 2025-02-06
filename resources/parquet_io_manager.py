@@ -70,7 +70,11 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
         asset_name = "_".join(
             context.asset_key.path
         )  # Convert asset key to a valid filename
-        partition_key = sanitize_filename(context.partition_key or "")
+        partition_key = (
+            sanitize_filename(context.partition_key)
+            if context.has_partition_key
+            else asset_name
+        )
 
         # Use custom metadata path if provided
         custom_path = (

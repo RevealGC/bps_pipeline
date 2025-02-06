@@ -7,7 +7,7 @@ from dagster import EnvVar
 from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
-import assets.bps_survey.bps_survey_data as bps_module
+from assets.bps_survey import bps_survey_data, cousub_fips
 from sensors.cm_files_sensor import file_sensor
 from assets.construction_monitor import (
     cm_csv_files,
@@ -27,7 +27,13 @@ BASE_PATH = Path(EnvVar("BASE_PATH").get_value()).expanduser().resolve()
 defs = dg.Definitions(
     assets=dg.with_source_code_references(
         dg.load_assets_from_modules(
-            [bps_module, cm_csv_files, cm_transform, cm_aggregate]
+            [
+                bps_survey_data,
+                cousub_fips,
+                cm_csv_files,
+                cm_transform,
+                cm_aggregate,
+            ]
         )
     ),
     sensors=[file_sensor],
