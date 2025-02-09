@@ -1,19 +1,22 @@
 """docstring"""
 
-from os import getenv
 from pathlib import Path
 import dagster as dg
 from dagster import EnvVar
 from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
-from assets.bps_survey import bps_survey_data, cousub_fips
-from sensors.cm_files_sensor import file_sensor
+from assets.bps_survey import (
+    # bps_survey_data,
+    cousub_fips,
+)
 from assets.construction_monitor import (
     cm_csv_files,
     cm_transform,
     cm_aggregate,
+    cm_compare,
 )
+from sensors.cm_files_sensor import file_sensor
 
 
 # resources
@@ -28,15 +31,16 @@ defs = dg.Definitions(
     assets=dg.with_source_code_references(
         dg.load_assets_from_modules(
             [
-                bps_survey_data,
+                # bps_survey_data,
                 cousub_fips,
                 cm_csv_files,
                 cm_transform,
                 cm_aggregate,
+                cm_compare,
             ]
         )
     ),
-    sensors=[file_sensor],
+    sensors=[file_sensor, *cousub_fips.census_sensors],
     resources={
         "cm_ftp_resource": FTPResource(
             host=EnvVar("CM_FTP_ADDRESS"),
