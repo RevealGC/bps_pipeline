@@ -2,7 +2,6 @@
 b
 """
 
-from datetime import datetime
 import dagster as dg
 import pandas as pd
 from assets.bps_survey.census_helper import get_bps_header
@@ -11,20 +10,8 @@ from assets.bps_survey.census_sensor_factory import build_census_sensor
 # ---------------------
 # Partitions Definitions
 # ---------------------
-yearly_partitions_def = dg.TimeWindowPartitionsDefinition(
-    start=datetime(2004, 1, 1), cron_schedule="0 0 1 1 *", end_offset=-1, fmt="%Y"
-)
-bps_releases_partitions_def = dg.DynamicPartitionsDefinition(name="bps_releases")
 
-# ---------------------
-# Shared Asset Parameters
-# ---------------------
-shared_params = {
-    "io_manager_key": "parquet_io_manager",
-    "group_name": "bps_survey",
-    "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
-    "automation_condition": dg.AutomationCondition.eager(),
-}
+bps_releases_partitions_def = dg.DynamicPartitionsDefinition(name="bps_releases")
 
 
 # ---------------------
@@ -59,7 +46,10 @@ def bps_releases_sensors() -> list[dg.SensorDefinition]:
 # assets
 # ---------------------
 @dg.asset(
+    io_manager_key="parquet_io_manager",
     group_name="census_publications",
+    owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
+    automation_condition=dg.AutomationCondition.eager(),
     config_schema={"url": str, "last_modified": str, "size": str},
     partitions_def=bps_releases_partitions_def,
     description="Raw BPS survey files downloaded from FTP",
