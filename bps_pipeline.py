@@ -22,6 +22,7 @@ from sensors.cm_files_sensor import file_sensor
 # resources
 from resources.parquet_io_manager import partitioned_parquet_io_manager
 from resources.cm_ftp_resource import FTPResource
+from resources.census_mft_resource import MFTResource
 
 # sensors
 # from sensors.release_sensor import release_sensor
@@ -57,6 +58,11 @@ defs = dg.Definitions(
         "ddb_io_manager": DuckDBPandasIOManager(
             database=str(BASE_PATH.joinpath("my_duckdb_database.duckdb")),  # required
             schema="bps_pipeline",  # optional, defaults to PUBLIC
+        ),
+        "census_mft_resource": MFTResource(
+            url=EnvVar("MFT_PASSWORD"),
+            username=EnvVar("MFT_USERNAME"),
+            password=EnvVar("MFT_BASE_URL"),
         ),
     },
 )
