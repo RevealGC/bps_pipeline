@@ -5,16 +5,16 @@ b
 from datetime import datetime
 import dagster as dg
 import pandas as pd
-import assets.bps_survey.census_helper as ch
-from utilities.dagster_utils import create_dynamic_partitions
+from assets.bps_survey.census_helper import get_bps_header
+from assets.bps_survey.census_sensor_factory import build_census_sensor
 
 # ---------------------
 # Partitions Definitions
 # ---------------------
-bps_releases_partitions_def = dg.DynamicPartitionsDefinition(name="bps_releases")
 yearly_partitions_def = dg.TimeWindowPartitionsDefinition(
-    start=datetime(2004, 1, 1), cron_schedule="0 0 1 1 *", fmt="%Y"
+    start=datetime(2004, 1, 1), cron_schedule="0 0 1 1 *", end_offset=-1, fmt="%Y"
 )
+bps_releases_partitions_def = dg.DynamicPartitionsDefinition(name="bps_releases")
 
 # ---------------------
 # Shared Asset Parameters
@@ -28,90 +28,55 @@ shared_params = {
 
 
 # ---------------------
-# Asset Definitions
+# census_sensors
 # ---------------------
-@dg.asset(
-    **shared_params,
-    partitions_def=yearly_partitions_def,
-    description="List of BPS survey files available on bps FTP server",
-)
-def bps_survey_releases(context):
-    """Get list of BPS survey files from FTP server."""
-
-    partition_key = int(context.partition_key)
-    url_base = "https://www2.census.gov/econ/bps/Place/"
+def bps_releases_sensors() -> list[dg.SensorDefinition]:
+    """Create sensors to monitor Census FTP server for new BPS metadata files."""
     regions = [
         "Midwest",
         "Northeast",
         "South",
         "West",
     ]
-    context.log.info(f"the current partiton year : {partition_key}")
-    context.log.info(f"retreiving data from {url_base}")
-
-    raw_metadata = []
+    url_base = "https://www2.census.gov/econ/bps/Place/"
+    bps_release_sensors = []
     for region in regions:
-        region_url = f"{url_base}{region}%20Region/"
-        metadata_list = ch.get_census_metadata(region_url)
-        raw_metadata.extend(metadata_list)
-
-    all_releases = pd.DataFrame(raw_metadata)
-
-    parsed_series = all_releases["filename"].apply(ch.parse_census_filename)
-    parsed_df = pd.DataFrame(parsed_series.tolist())
-    all_releases = pd.concat([all_releases, parsed_df], axis=1)
-    all_releases = all_releases.sort_values(by="last_modified", ascending=True)
-
-    context.log.info(f"Found {len(all_releases)} releases.")
-
-    selected_releases_data = all_releases.query(
-        "suffix == 'C' and year == @partition_key"
-    )
-
-    selected_partitions = (
-        selected_releases_data["filename"].str.replace(".txt", "").unique().tolist()
-    )
-
-    new_partitions = create_dynamic_partitions(
-        context=context,
-        dynamic_partiton_def=bps_releases_partitions_def,
-        possible_partitions=selected_partitions,
-    )
-
-    return dg.Output(
-        selected_releases_data,
-        metadata={
-            "num_files": len(all_releases),
-            "preview": dg.MetadataValue.md(
-                pd.DataFrame(new_partitions).head().to_markdown()
-            ),
-        },
-    )
+        bps_release_sensors.append(
+            build_census_sensor(
+                target="bps_survey_files",
+                census_url=f"{url_base}{region}%20Region/",
+                partition_def=bps_releases_partitions_def,
+                description="Monitor the Census FTP server for new BPS metadata files.",
+                name_suffix=f"_{region}",
+                min_interval_seconds=30,
+                file_filter=r".*c\.txt$",  # so9508c.txt
+            )
+        )
+    return bps_release_sensors
 
 
+# ---------------------
+# assets
+# ---------------------
 @dg.asset(
     **shared_params,
+    config_schema={"url": str, "last_modified": str, "size": str},
     partitions_def=bps_releases_partitions_def,
-    ins={
-        "releases": dg.AssetIn("bps_survey_releases"),
-    },
     description="Raw BPS survey files downloaded from FTP",
-    # metadata={
-    #     "outpath": "bps_raw_survey_files/{partition_key}.parquet",
-    # },
 )
-def bps_survey_files(context, releases: pd.DataFrame) -> dg.Output[pd.DataFrame]:
+def bps_survey_files(context) -> dg.Output[pd.DataFrame]:
     """Download and store BPS survey files as parquet."""
+    url = context.op_config["url"]
     partition_key = context.partition_key
-    context.log.info(f"Downloading file: {partition_key}")
 
-    url = releases[releases["filename"] == f"{partition_key}.txt"]["file_url"].values[0]
+    context.log.info(f"Downloading file: {partition_key}")
 
     raw_bps_survey = pd.read_csv(
         url, encoding="utf-8", index_col=False, skiprows=3, header=None, dtype=str
     )
+
     total_cols = raw_bps_survey.shape[1]
-    id_cols = ch.get_bps_header(url, total_cols)
+    id_cols = get_bps_header(url, total_cols)
     new_col_names = id_cols.copy()
 
     # add the last 12 columns to id columns
@@ -145,22 +110,8 @@ def bps_survey_files(context, releases: pd.DataFrame) -> dg.Output[pd.DataFrame]
         metadata={
             "preview": dg.MetadataValue.md(melted_bps_data.head().to_markdown()),
             "rows_downloaded": file_rows,
+            "url": url,
+            "last_modified": context.op_config["last_modified"],
+            "size": context.op_config["size"],
         },
     )
-
-
-# # %%
-# def enriched_bps_survey_data(
-#     context, bps_survey_files: pd.DataFrame
-# ) -> dg.Output[pd.DataFrame]:
-#     """Aggregate BPS survey data."""
-#     df
-#     groups = ["1_unit", "2_units", "3_4_units", "5+_units"]
-
-#     df = df[df["unit_group"].isin(groups)]
-#     df = (
-#         df.groupby(["permit_month", "jurisdiction", "unit_group"])
-#         .agg(permit_dwellings=("permit_dwellings", "sum"))
-#         .reset_index()
-#     )
-#     return df

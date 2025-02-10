@@ -7,7 +7,7 @@ from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
 from assets.bps_survey import (
-    # bps_survey_data,
+    bps_survey_data,
     cousub_fips,
 )
 from assets.construction_monitor import (
@@ -31,7 +31,7 @@ defs = dg.Definitions(
     assets=dg.with_source_code_references(
         dg.load_assets_from_modules(
             [
-                # bps_survey_data,
+                bps_survey_data,
                 cousub_fips,
                 cm_csv_files,
                 cm_transform,
@@ -40,7 +40,11 @@ defs = dg.Definitions(
             ]
         )
     ),
-    sensors=[file_sensor, *cousub_fips.census_sensors],
+    sensors=[
+        file_sensor,
+        *cousub_fips.census_sensors,
+        *bps_survey_data.bps_releases_sensors(),
+    ],
     resources={
         "cm_ftp_resource": FTPResource(
             host=EnvVar("CM_FTP_ADDRESS"),

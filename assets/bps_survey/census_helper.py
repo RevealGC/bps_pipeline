@@ -223,109 +223,107 @@ class CensusHelper:
         self._folders = all_folders
         self._files = all_files
 
-    def parse_filename(
-        self, filename: str, pattern_mappings: list[dict], file_ending: str = ".txt"
-    ) -> dict:
-        """
-        Parse a filename according to a custom pattern.
 
-        Args:
-            filename (str): The file name to parse (e.g., "SO2006A.TXT").
-            pattern_mappings (list[dict]): A list of rules describing how to split
-                                           and convert each part into a field.
-                Example:
-                  [
-                    {"start": 0, "end": 2, "field": "region_code"},
-                    {"start": 2, "end": -1, "field": "date_str"},
-                    {"start": -1, "end": None, "field": "suffix"},
-                  ]
-                This means:
-                    region_code = chars [0:2]
-                    date_str    = chars [2:-1]
-                    suffix      = chars [-1:]
+def parse_filename(
+    filename: str, pattern_mappings: list[dict], file_ending: str = ".txt"
+) -> dict:
+    """
+    Parse a filename according to a custom pattern.
 
-            file_ending (str, optional): The file extension to remove. Defaults to ".TXT".
+    Args:
+        filename (str): The file name to parse (e.g., "SO2006A.TXT").
+        pattern_mappings (list[dict]): A list of rules describing how to split
+                                        and convert each part into a field.
+            Example:
+                [
+                {"start": 0, "end": 2, "field": "region_code"},
+                {"start": 2, "end": -1, "field": "date_str"},
+                {"start": -1, "end": None, "field": "suffix"},
+                ]
+            This means:
+                region_code = chars [0:2]
+                date_str    = chars [2:-1]
+                suffix      = chars [-1:]
 
-        Returns:
-            dict: Dictionary of parsed fields based on your pattern_mappings.
-        """
-        name = filename
-        if file_ending in filename:
-            name = filename.replace(file_ending, "")
+        file_ending (str, optional): The file extension to remove. Defaults to ".TXT".
 
-        parsed_result = {}
-        for rule in pattern_mappings:
-            start = rule["start"]
-            end = rule["end"]
-            field_name = rule["field"]
-            part = name[start:end] if end else name[start:]  # e.g. name[-1:] for suffix
-            parsed_result[field_name] = part
+    Returns:
+        dict: Dictionary of parsed fields based on your pattern_mappings.
+    """
+    name = filename
+    if file_ending in filename:
+        name = filename.replace(file_ending, "")
 
-        return parsed_result
+    parsed_result = {}
+    for rule in pattern_mappings:
+        start = rule["start"]
+        end = rule["end"]
+        field_name = rule["field"]
+        part = name[start:end] if end else name[start:]  # e.g. name[-1:] for suffix
+        parsed_result[field_name] = part
 
-    def parse_filenames(
-        self,
-        filenames: list[str],
-        pattern_mappings: list[dict],
-        file_ending: str = ".TXT",
-    ):
-        """
-        Parse multiple filenames with the same custom mapping.
+    return parsed_result
 
-        Args:
-            filenames (list[str]): The file names to parse.
-            pattern_mappings (list[dict]): Same structure as parse_filename.
-            file_ending (str, optional): The file extension to remove (default ".TXT").
 
-        Returns:
-            list[dict]: Each dict is the parse result for a single filename.
-        """
-        return [
-            self.parse_filename(fn, pattern_mappings, file_ending) for fn in filenames
-        ]
+def parse_filenames(
+    filenames: list[str],
+    pattern_mappings: list[dict],
+    file_ending: str = ".TXT",
+):
+    """
+    Parse multiple filenames with the same custom mapping.
 
-    def get_bps_header(self, path_to_file: str, var_column_count: int) -> list[str]:
-        """
-        Utility to extract the first two lines from a BPS survey file at `path_to_file`
-        and build column names.
+    Args:
+        filenames (list[str]): The file names to parse.
+        pattern_mappings (list[dict]): Same structure as parse_filename.
+        file_ending (str, optional): The file extension to remove (default ".TXT").
 
-        Example usage:
-            raw_bps_survey = pd.read_csv(url, encoding="utf-8", index_col=False, skiprows=3, header=None, dtype=str)
-            total_cols = raw_bps_survey.shape[1]
-            id_cols = helper.get_bps_header(url, total_cols)
-            new_col_names = id_cols.copy()
+    Returns:
+        list[dict]: Each dict is the parse result for a single filename.
+    """
+    return [parse_filename(fn, pattern_mappings, file_ending) for fn in filenames]
 
-        Args:
-            path_to_file (str): The file URL or path.
-            var_column_count (int): The total number of columns (var_column_names).
 
-        Returns:
-            list[str]: Column names from the first two header lines (minus the last 12 columns).
-        """
-        response = requests.get(path_to_file, timeout=self.timeout)
-        response.raise_for_status()
+def get_bps_header(path_to_file: str, var_column_count: int, timeout=5) -> list[str]:
+    """
+    Utility to extract the first two lines from a BPS survey file at `path_to_file`
+    and build column names.
 
-        lines = response.text.splitlines()
-        if len(lines) < 2:
-            raise ValueError(f"Expected at least 2 lines in header, got {len(lines)}")
+    Example usage:
+        raw_bps_survey = pd.read_csv(url, encoding="utf-8", index_col=False, skiprows=3, header=None, dtype=str)
+        total_cols = raw_bps_survey.shape[1]
+        id_cols = helper.get_bps_header(url, total_cols)
+        new_col_names = id_cols.copy()
 
-        header_line_1 = lines[0].strip().split(",")
-        header_line_2 = lines[1].strip().split(",")
+    Args:
+        path_to_file (str): The file URL or path.
+        var_column_count (int): The total number of columns (var_column_names).
 
-        # everything up to "last 12 columns"
-        cutoff = var_column_count - 12
-        new_col_names = []
-        for i in range(cutoff):
-            top_level = header_line_1[i].strip() if i < len(header_line_1) else ""
-            sub_level = header_line_2[i].strip() if i < len(header_line_2) else ""
-            combined = (
-                f"{top_level}_{sub_level}".strip("_")
-                .replace(" ", "_")
-                .replace("-", "_")
-            )
-            new_col_names.append(combined)
+    Returns:
+        list[str]: Column names from the first two header lines (minus the last 12 columns).
+    """
+    response = requests.get(path_to_file, timeout=timeout)
+    response.raise_for_status()
 
-        return new_col_names
+    lines = response.text.splitlines()
+    if len(lines) < 2:
+        raise ValueError(f"Expected at least 2 lines in header, got {len(lines)}")
+
+    header_line_1 = lines[0].strip().split(",")
+    header_line_2 = lines[1].strip().split(",")
+
+    # everything up to "last 12 columns"
+    cutoff = var_column_count - 12
+    new_col_names = []
+    for i in range(cutoff):
+        top_level = header_line_1[i].strip() if i < len(header_line_1) else ""
+        sub_level = header_line_2[i].strip() if i < len(header_line_2) else ""
+        combined = (
+            f"{top_level}_{sub_level}".strip("_").replace(" ", "_").replace("-", "_")
+        )
+        new_col_names.append(combined)
+
+    return new_col_names
 
 
 # %%
