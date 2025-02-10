@@ -11,7 +11,7 @@ fips_releases_partitions_def = dg.DynamicPartitionsDefinition(name="cousub_fips"
 census_sensors = [
     build_census_sensor(
         target="county_fips",
-        census_url="https://www2.census.gov/geo/docs/reference/codes2020/place_by_cou/",
+        census_url="https://www2.census.gov/geo/docs/reference/codes2020/cou/",
         partition_def=fips_releases_partitions_def,
         description="Monitor the Census FTP server for new FIPS metadata files.",
         min_interval_seconds=30,
