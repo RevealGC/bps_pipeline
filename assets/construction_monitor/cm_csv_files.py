@@ -146,17 +146,19 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
 @dg.asset(
     **shared_params,
     io_manager_key="parquet_io_manager",
+    config_schema={"file_path": str, "last_modified": str, "size": str},
     deps=[dg.AssetKey("cm_ftp_csv_files")],
     partitions_def=cm_permit_files_partitions,
     description="Read raw permit data from a CSV file.",
 )
 def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
     """Read raw permit data from a CSV file."""
-    partition_key = context.partition_key
+    config = context.op_config
+    file_path = config["file_path"]
 
-    context.log.info(f"Reading permit data from {partition_key}.")
+    context.log.info(f"Reading permit data from {file_path}.")
     permit_df = pd.read_csv(
-        partition_key, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
+        file_path, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
     )
     permit_df.fillna("", inplace=True)
 
@@ -170,6 +172,9 @@ def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
             "inferred_schema": dg.MetadataValue.md(
                 str(permit_df.dtypes.to_frame().to_markdown())
             ),
+            "source_last_modified": config["last_modified"],
+            "source_size": config["size"],
+            "source_path": config["file_path"],
         },
     )
 

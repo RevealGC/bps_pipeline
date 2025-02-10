@@ -3,6 +3,7 @@
 import re
 from typing import List
 from pathlib import Path
+from datetime import datetime, timezone
 import dagster as dg
 
 from assets.construction_monitor.cm_csv_files import cm_permit_files_partitions
@@ -65,12 +66,12 @@ def cm_files_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult:
                 file_dict = {
                     "partition_name": str(file_path.name),
                     "file_path": str(file_path),
-                    "last_modified": file_path.stat().st_mtime,
-                    "file_size": file_path.stat().st_size,
+                    "last_modified": datetime.fromtimestamp(
+                        file_path.stat().st_mtime, tz=timezone.utc
+                    ).isoformat(),
+                    "file_size": str(file_path.stat().st_size),
                 }
-                # context.log.info(
-                #     f"Found new file: {file_path} (size: {file_size}, last modified: {last_modified})"
-                # )
+
                 new_files.append(file_dict)
 
     if skip_counter > 0:
