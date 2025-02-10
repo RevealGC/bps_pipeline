@@ -16,7 +16,7 @@ cm_issued_date_files_partitions = dg.DynamicPartitionsDefinition(
 
 shared_params = {
     "group_name": "cm_raw_permits",
-    "automation_condition": dg.AutomationCondition.eager(),
+    # "automation_condition": dg.AutomationCondition.missing(),
     "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
 }
 
@@ -152,6 +152,37 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
 )
 def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
     """Read raw permit data from a CSV file."""
+    partition_key = context.partition_key
+
+    context.log.info(f"Reading permit data from {partition_key}.")
+    permit_df = pd.read_csv(
+        partition_key, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
+    )
+    permit_df.fillna("", inplace=True)
+
+    return dg.Output(
+        permit_df,
+        # None,
+        metadata={
+            "num_rows": permit_df.shape[0],
+            "num_columns": permit_df.shape[1],
+            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
+            "inferred_schema": dg.MetadataValue.md(
+                str(permit_df.dtypes.to_frame().to_markdown())
+            ),
+        },
+    )
+
+
+@dg.asset(
+    **shared_params,
+    io_manager_key="parquet_io_manager",
+    deps=[dg.AssetKey("cm_permit_files")],
+    partitions_def=cm_permit_files_partitions,
+    description="Read imputation data from a CSV file.",
+)
+def mft_cm_permit_files(context) -> dg.Output[pd.DataFrame]:
+    """write permit csv to parquet."""
     partition_key = context.partition_key
 
     context.log.info(f"Reading permit data from {partition_key}.")
