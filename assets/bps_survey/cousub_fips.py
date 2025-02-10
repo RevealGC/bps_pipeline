@@ -21,7 +21,7 @@ census_sensors = [
 
 @dg.asset(
     io_manager_key="parquet_io_manager",
-    group_name="census_fips",
+    group_name="census_publications",
     owners=["elo.lewis@revealgc.com", "team:construction-reengineering"],
     automation_condition=dg.AutomationCondition.eager(),
     config_schema={"url": str, "last_modified": str, "size": str},

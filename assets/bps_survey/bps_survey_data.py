@@ -59,7 +59,7 @@ def bps_releases_sensors() -> list[dg.SensorDefinition]:
 # assets
 # ---------------------
 @dg.asset(
-    **shared_params,
+    group_name="census_publications",
     config_schema={"url": str, "last_modified": str, "size": str},
     partitions_def=bps_releases_partitions_def,
     description="Raw BPS survey files downloaded from FTP",
