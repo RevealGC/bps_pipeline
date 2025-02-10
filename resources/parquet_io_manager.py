@@ -2,17 +2,11 @@
 
 import os
 import re
+from typing import Optional
 import pandas as pd
-from dagster import (
-    ConfigurableIOManager,
-    InputContext,
-    OutputContext,
-    Config,
-    io_manager,
-)
+import dagster as dg
 from dagster._seven.temp_dir import get_system_temp_directory
 from pydantic import Field
-from typing import Optional
 
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
@@ -32,7 +26,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     return filename[:max_length]  # Truncate filename to max length
 
 
-class PartitionedParquetIOManager(ConfigurableIOManager):
+class PartitionedParquetIOManager(dg.ConfigurableIOManager):
     """
     A unified IOManager for handling Parquet files in a Dagster pipeline.
 
@@ -56,7 +50,9 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
         """Return the appropriate base path (local or S3)."""
         return f"s3://{self.s3_bucket}" if self.s3_bucket else self.base_path
 
-    def _resolve_path(self, context, mode: str = "output") -> str:
+    def _resolve_path(
+        self, context: dg.AssetExecutionContext, mode: str = "output"
+    ) -> str:
         """
         Generate a file path based on asset name, partition, and mode.
 
@@ -67,14 +63,42 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
         Returns:
             str: The resolved file path.
         """
-        asset_name = "_".join(
-            context.asset_key.path
-        )  # Convert asset key to a valid filename
-        partition_key = (
-            sanitize_filename(context.partition_key)
-            if context.has_partition_key
-            else asset_name
-        )
+        asset_name = "_".join(context.asset_key.path)
+
+        partition_path = asset_name
+        if context.has_partition_key:
+            if isinstance(context.partition_key, str):
+                partition_path = sanitize_filename(context.partition_key)
+            elif isinstance(
+                context.partition_key, tuple
+            ):  # Handle multi-partition case
+                partition_path = os.path.join(
+                    *map(sanitize_filename, context.partition_keys)
+                )
+
+        upstream_partition_path = "default_upstream"
+        if (
+            mode == "input"
+            and getattr(context, "upstream_output", None) is not None
+            and context.upstream_output.has_partition_key
+        ):
+            up_pk = context.upstream_output.partition_key
+            if isinstance(up_pk, str):
+                upstream_partition_path = sanitize_filename(up_pk)
+            elif isinstance(up_pk, tuple):
+                upstream_partition_path = "_".join(map(sanitize_filename, up_pk))
+
+        if mode == "output":
+            custom_path = context.metadata.get("inpath") or context.metadata.get(
+                "custom_path"
+            )
+        else:
+            if getattr(context, "upstream_output", None) is not None:
+                custom_path = context.upstream_output.metadata.get(
+                    "inpath"
+                ) or context.upstream_output.metadata.get("custom_path")
+            else:
+                custom_path = None
 
         # Use custom metadata path if provided
         custom_path = (
@@ -82,7 +106,7 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
             if mode == "output"
             else (
                 context.upstream_output.metadata.get("custom_path", None)
-                if context.has_upstream_output
+                if context.upstream_output is not None
                 else None
             )
         )
@@ -94,17 +118,20 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
                     self._base_path,
                     custom_path.format(
                         filename=asset_name,
-                        partition_key=partition_key,
+                        partition_path=partition_path,
+                        upstream_partition_key=upstream_partition_path,
                     ),
                 )
-            return custom_path.format(filename=asset_name, partition_key=partition_key)
+            return custom_path.format(
+                filename=asset_name, partition_path=partition_path
+            )
 
         # Default file path
         return os.path.join(
-            self._base_path, sanitize_filename(asset_name), f"{partition_key}.parquet"
+            self._base_path, sanitize_filename(asset_name), f"{partition_path}.parquet"
         )
 
-    def handle_output(self, context: OutputContext, obj: pd.DataFrame):
+    def handle_output(self, context: dg.OutputContext, obj: pd.DataFrame):
         """
         Save a pandas DataFrame as a Parquet file.
 
@@ -135,7 +162,7 @@ class PartitionedParquetIOManager(ConfigurableIOManager):
         context.add_output_metadata({"path": output_path, "row_count": len(obj)})
         context.log.info(f"Parquet file saved to: {output_path}")
 
-    def load_input(self, context: InputContext) -> pd.DataFrame:
+    def load_input(self, context: dg.InputContext) -> pd.DataFrame:
         """
         Load a pandas DataFrame from a Parquet file.
 
@@ -160,14 +187,14 @@ class S3PartitionedParquetIOManager(PartitionedParquetIOManager):
     s3_bucket: str
 
 
-class ParquetIOManagerConfig(Config):
+class ParquetIOManagerConfig(dg.Config):
     """Pydantic config for the IO manager."""
 
     base_path: str = Field(default_factory=get_system_temp_directory)
     s3_bucket: Optional[str] = None
 
 
-@io_manager
+@dg.io_manager
 def partitioned_parquet_io_manager(init_context) -> PartitionedParquetIOManager:
     """Dagster IO manager factory function."""
     config_data = init_context.resource_config
