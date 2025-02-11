@@ -61,9 +61,9 @@ defs = dg.Definitions(
             schema="bps_pipeline",  # optional, defaults to PUBLIC
         ),
         "census_mft_resource": MFTResource(
-            url=EnvVar("MFT_PASSWORD"),
+            url=EnvVar("MFT_BASE_URL"),
             username=EnvVar("MFT_USERNAME"),
-            password=EnvVar("MFT_BASE_URL"),
+            password=EnvVar("MFT_PASSWORD"),
         ),
         "file_monitor_config": FileMonitorConfig(
             local_directories=[EnvVar("PERMIT_DATA_DIRECTORY")],
