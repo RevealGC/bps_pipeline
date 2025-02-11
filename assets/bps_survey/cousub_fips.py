@@ -14,7 +14,6 @@ census_sensors = [
         census_url="https://www2.census.gov/geo/docs/reference/codes2020/cou/",
         partition_def=fips_releases_partitions_def,
         description="Monitor the Census FTP server for new FIPS metadata files.",
-        min_interval_seconds=30,
     )
 ]
 

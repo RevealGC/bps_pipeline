@@ -35,7 +35,6 @@ def bps_releases_sensors() -> list[dg.SensorDefinition]:
                 partition_def=bps_releases_partitions_def,
                 description="Monitor the Census FTP server for new BPS metadata files.",
                 name_suffix=f"_{region}",
-                min_interval_seconds=30,
                 file_filter=r".*c\.txt$",  # so9508c.txt
             )
         )
