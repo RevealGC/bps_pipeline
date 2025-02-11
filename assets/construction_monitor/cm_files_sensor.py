@@ -35,7 +35,7 @@ class FileMonitorConfig(dg.ConfigurableResource):
 
 
 @dg.sensor(
-    target=dg.AssetSelection.assets(dg.AssetKey("cm_permit_files")),
+    target=dg.AssetSelection.assets("cm_permit_files"),
     required_resource_keys={"file_monitor_config"},
     minimum_interval_seconds=30,
     description="Detect new files in specified directories.",
@@ -102,7 +102,7 @@ def cm_files_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult:
                         "config": {
                             "file_path": file["file_path"],
                             "last_modified": file["last_modified"],
-                            "size": file["file_size"],
+                            "size": str(file["file_size"]),
                         }
                     }
                 }
