@@ -4,7 +4,9 @@ This script transfers files to census via MFT
 """
 
 import base64
+import re
 import subprocess
+from typing import Optional
 from pathlib import Path
 import dagster as dg
 
@@ -23,7 +25,13 @@ class MFTClient:
             Uploads a file to the specified MFT destination folder.
     """
 
-    def __init__(self, url: str, username: str, password: str):
+    def __init__(
+        self,
+        url: str,
+        token: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
         """
         Initializes the MFTClient with server credentials.
 
@@ -33,8 +41,25 @@ class MFTClient:
             password (str): The password for authentication.
         """
         self.url = url
-        self.username = username
-        self.password = password
+        if token is None and (username is None or password is None):
+            raise ValueError("Either token or username and password must be provided.")
+        if token is not None and (username is not None or password is not None):
+            raise ValueError(
+                "Only one of token or username and password can be provided."
+            )
+
+        self.token = (
+            token if token is not None else self._encode_credentials(username, password)
+        )
+
+    def _encode_credentials(self, username, password) -> str:
+        """
+        Encodes the username and password for use in HTTP Basic Authentication.
+
+        Returns:
+            str: The encoded credentials.
+        """
+        return base64.b64encode(f"{username}:{password}".encode()).decode()
 
     def send_file(self, target_file: Path, dest_name: str, dest_folder=""):
         """
@@ -60,24 +85,57 @@ class MFTClient:
 
         folder_url = self.url + dest_folder
 
-        user_token = f"{self.username}:{self.password}"
-        encoded_token = base64.b64encode(user_token.encode()).decode()
-
         # verify file exists
 
         # create curl command
         mft_str = (
-            f'curl -X POST "{folder_url}{dest_name}?packet=1&position=0&final=true" '
-            f'-H "Authorization: Basic {encoded_token}" '
+            f'curl -X POST "{folder_url}/{dest_name}?packet=1&position=0&final=true" '
+            f'-H "Authorization: Basic {self.token}" '
             f'-T "{target_file}" -v'
         )
 
-        # send file wit subprocess logging
-        curl_result = subprocess.run(
-            mft_str, shell=True, capture_output=True, text=True, check=True
+        try:
+            # send file wit subprocess logging
+            result = subprocess.run(
+                mft_str, shell=True, capture_output=True, text=True, check=True
+            )
+            success = True
+
+        except subprocess.CalledProcessError as e:
+            result = e
+            success = False
+
+        redacted_stdout = self._scrub_sensitive_data(result.stdout)
+        redacted_stderr = self._scrub_sensitive_data(result.stderr)
+
+        return {
+            "stdout": redacted_stdout,
+            "stderr": redacted_stderr,
+            "returncode": result.returncode,
+            "error": None if success else "File transfer failed.",
+        }
+
+    def _scrub_sensitive_data(self, text):
+        """
+        Removes sensitive information from subprocess output before logging.
+
+        Args:
+            text (str): The original stdout or stderr text.
+
+        Returns:
+            str: The redacted text with authentication details removed.
+        """
+        if not text:
+            return "No output"
+
+        # Use regex to remove the Authorization header details
+        redacted_text = re.sub(
+            r"Authorization: Basic [A-Za-z0-9+/=]+",
+            "Authorization: Basic ***REDACTED***",
+            text,
         )
 
-        return curl_result
+        return redacted_text
 
 
 class MFTResource(dg.ConfigurableResource):
@@ -89,11 +147,21 @@ class MFTResource(dg.ConfigurableResource):
     username: str
     password: str
 
+    def _encode_credentials(self) -> str:
+        """
+        Encodes the username and password for use in HTTP Basic Authentication.
+
+        Returns:
+            str: The encoded credentials.
+        """
+        return base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+
     def get_client(self) -> MFTClient:
         """
         Returns an MFTClient instance with the resource's credentials.
         """
-        return MFTClient(self.url, self.username, self.password)
+        encoded_token = self._encode_credentials()
+        return MFTClient(url=self.url, token=encoded_token)
 
 
 # Example usage of MFTClient
@@ -114,13 +182,13 @@ if __name__ == "__main__":
 
     try:
         # Upload file to MFT server
-        result = mft_client.send_file(
+        res = mft_client.send_file(
             Path("test_dir/test_file.csv"), "uploaded_test_file.csv", "rgc_rawdata_cm"
         )
 
         # Print upload response
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+        print("STDOUT:", res["stdout"])
+        print("STDERR:", res["stderr"])
 
     except FileNotFoundError as e:
         print("File not found error:", e)
