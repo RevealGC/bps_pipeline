@@ -2,10 +2,12 @@
 
 import os
 import re
+import json
 from typing import List, Generator
 import pandas as pd
 import dagster as dg
 from utilities.dagster_utils import create_dynamic_partitions
+from assets.construction_monitor.cm_helper import rename_cm_weekly_file
 
 cm_permit_files_partitions = dg.DynamicPartitionsDefinition(name="cm_ftp_files")
 cm_ftp_files_partitions = dg.DynamicPartitionsDefinition(name="cm_files")
@@ -147,16 +149,33 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
     **shared_params,
     io_manager_key="parquet_io_manager",
     config_schema={"file_path": str, "last_modified": str, "size": str},
+    required_resource_keys={"census_mft_resource"},
     deps=[dg.AssetKey("cm_ftp_csv_files")],
     partitions_def=cm_permit_files_partitions,
     description="Read raw permit data from a CSV file.",
 )
-def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
+def cm_permit_files(context: dg.AssetExecutionContext) -> dg.Output[pd.DataFrame]:
     """Read raw permit data from a CSV file."""
     config = context.op_config
-    file_path = config["file_path"]
+    context.add_output_metadata(config)
 
+    file_path = config["file_path"]
+    mft_resource = context.resources.census_mft_resource
     context.log.info(f"Reading permit data from {file_path}.")
+
+    # try to push file to mft
+    mft_client = mft_resource.get_client()
+    results = mft_client.send_file(
+        target_file=file_path,
+        dest_name=rename_cm_weekly_file(context.partition_key),
+        dest_folder="rgc_rawdata_cm",
+    )
+    results_md = f"```json\n{json.dumps(results, indent=2)}\n```"
+
+    # context.metadata["mft_result"] = results
+    # yield dg.Output(results, output_name="mft_cm_permit_files")
+
+    # load file into parquet directory
     permit_df = pd.read_csv(
         file_path, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
     )
@@ -164,7 +183,7 @@ def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
 
     return dg.Output(
         permit_df,
-        # None,
+        # output_name="cm_permit_files",
         metadata={
             "num_rows": permit_df.shape[0],
             "num_columns": permit_df.shape[1],
@@ -175,36 +194,37 @@ def cm_permit_files(context) -> dg.Output[pd.DataFrame]:
             "source_last_modified": config["last_modified"],
             "source_size": config["size"],
             "source_path": config["file_path"],
+            "mft_result": dg.MetadataValue.md(results_md),
         },
     )
 
 
-@dg.asset(
-    **shared_params,
-    io_manager_key="parquet_io_manager",
-    deps=[dg.AssetKey("cm_permit_files")],
-    partitions_def=cm_permit_files_partitions,
-    description="Read imputation data from a CSV file.",
-)
-def mft_cm_permit_files(context) -> dg.Output[pd.DataFrame]:
-    """write permit csv to parquet."""
-    partition_key = context.partition_key
+# @dg.asset(
+#     **shared_params,
+#     io_manager_key="parquet_io_manager",
+#     deps=[dg.AssetKey("cm_permit_files")],
+#     partitions_def=cm_permit_files_partitions,
+#     description="Read imputation data from a CSV file.",
+# )
+# def mft_cm_permit_files(context) -> dg.Output[pd.DataFrame]:
+#     """write permit csv to parquet."""
+#     partition_key = context.partition_key
 
-    context.log.info(f"Reading permit data from {partition_key}.")
-    permit_df = pd.read_csv(
-        partition_key, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
-    )
-    permit_df.fillna("", inplace=True)
+#     context.log.info(f"Reading permit data from {partition_key}.")
+#     permit_df = pd.read_csv(
+#         partition_key, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
+#     )
+#     permit_df.fillna("", inplace=True)
 
-    return dg.Output(
-        permit_df,
-        # None,
-        metadata={
-            "num_rows": permit_df.shape[0],
-            "num_columns": permit_df.shape[1],
-            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
-            "inferred_schema": dg.MetadataValue.md(
-                str(permit_df.dtypes.to_frame().to_markdown())
-            ),
-        },
-    )
+#     return dg.Output(
+#         permit_df,
+#         # None,
+#         metadata={
+#             "num_rows": permit_df.shape[0],
+#             "num_columns": permit_df.shape[1],
+#             "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
+#             "inferred_schema": dg.MetadataValue.md(
+#                 str(permit_df.dtypes.to_frame().to_markdown())
+#             ),
+#         },
+#     )
