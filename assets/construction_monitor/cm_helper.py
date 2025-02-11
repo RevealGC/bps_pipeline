@@ -4,6 +4,7 @@ Helper functions for construction monitor ETL.
 """
 
 import re
+from datetime import datetime
 import pandas as pd
 
 
@@ -42,3 +43,26 @@ def parse_cm_date(cm_file):
         )  # First day of that week
 
     return pd.NaT  # If no match, return NaT
+
+
+# %%
+def rename_cm_weekly_file(filename: str) -> str:
+    """Rename cm_weekly file to match the format of cm_monthly file."""
+
+    pattern = (
+        r"(?P<company>[a-zA-Z]+)-(?P<type>[a-zA-Z]+)-(?P<year>\d{4})-(?P<week>\d+)"
+    )
+    match = re.match(pattern, filename)
+
+    if not match:
+        return filename  # Pattern didn't match, return original
+
+    year = int(match.group("year"))
+    week_number = int(match.group("week"))
+
+    first_day = datetime.strptime(f"{year}-W{week_number}-1", "%G-W%V-%u")
+    date_str = first_day.strftime("%Y_%m_%d")
+
+    # Build the new filename
+    new_filename = f"cm_orig_{date_str}.csv"
+    return new_filename
