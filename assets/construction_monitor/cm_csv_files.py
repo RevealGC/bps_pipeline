@@ -9,12 +9,13 @@ import dagster as dg
 from utilities.dagster_utils import create_dynamic_partitions
 from assets.construction_monitor.cm_helper import rename_cm_weekly_file
 
-cm_permit_files_partitions = dg.DynamicPartitionsDefinition(name="cm_ftp_files")
-cm_ftp_files_partitions = dg.DynamicPartitionsDefinition(name="cm_files")
+cm_ftp_files_partitions = dg.DynamicPartitionsDefinition(name="cm_ftp_files")
 cm_imputation_files_partitions = dg.DynamicPartitionsDefinition(name="imputation_files")
 cm_issued_date_files_partitions = dg.DynamicPartitionsDefinition(
     name="issued_date_files"
 )
+cm_raw_files_partitions = dg.DynamicPartitionsDefinition(name="cm_raw_files")
+cm_permit_files_partitions = dg.DynamicPartitionsDefinition(name="cm_files")
 
 shared_params = {
     "group_name": "cm_raw_permits",
@@ -151,7 +152,7 @@ def cm_ftp_csv_files(context) -> dg.Output[None]:
     config_schema={"file_path": str, "last_modified": str, "size": str},
     required_resource_keys={"census_mft_resource"},
     deps=[dg.AssetKey("cm_ftp_csv_files")],
-    partitions_def=cm_permit_files_partitions,
+    partitions_def=cm_raw_files_partitions,
     description="Read raw permit data from a CSV file.",
 )
 def cm_permit_files(context: dg.AssetExecutionContext) -> dg.Output[pd.DataFrame]:
@@ -180,6 +181,16 @@ def cm_permit_files(context: dg.AssetExecutionContext) -> dg.Output[pd.DataFrame
         file_path, encoding="ISO-8859-1", dtype_backend="pyarrow", dtype=str
     )
     permit_df.fillna("", inplace=True)
+
+    if not permit_df.empty or permit_df.shape[0] == 0:
+        context.log.warning(f"No records found in {file_path}.")
+        return dg.Output(permit_df, metadata={"num_rows": 0})
+
+    create_dynamic_partitions(
+        context=context,
+        dynamic_partiton_def=cm_permit_files_partitions,
+        possible_partitions=[context.partition_key],
+    )
 
     return dg.Output(
         permit_df,

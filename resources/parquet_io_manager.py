@@ -175,10 +175,17 @@ class PartitionedParquetIOManager(dg.ConfigurableIOManager):
         input_path = self._resolve_path(context, mode="input")
         context.log.info(f"Loading Parquet file from: {input_path}")
 
-        if "://" not in input_path and not os.path.exists(input_path):
-            raise FileNotFoundError(f"Parquet file not found: {input_path}")
+        if not os.path.exists(input_path):
+            context.log.warning(
+                f"File {input_path} not found. Returning empty DataFrame."
+            )
+            return pd.DataFrame()
 
-        return pd.read_parquet(input_path)
+        try:
+            return pd.read_parquet(input_path)
+        except (pd.errors.EmptyDataError, FileNotFoundError, OSError) as e:
+            context.log.error(f"Error reading Parquet file {input_path}: {e}")
+            return pd.DataFrame()
 
 
 class S3PartitionedParquetIOManager(PartitionedParquetIOManager):

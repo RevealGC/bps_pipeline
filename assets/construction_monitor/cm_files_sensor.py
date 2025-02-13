@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import dagster as dg
 
-from assets.construction_monitor.cm_csv_files import cm_permit_files_partitions
+from assets.construction_monitor.cm_csv_files import cm_raw_files_partitions
 
 
 # class ConfigFileDirectories:
@@ -61,7 +61,7 @@ def cm_files_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult:
                 continue
 
             if not context.instance.has_dynamic_partition(
-                cm_permit_files_partitions.name, str(file_path.name)
+                cm_raw_files_partitions.name, str(file_path.name)
             ):
                 file_dict = {
                     "partition_name": str(file_path.name),
@@ -89,9 +89,9 @@ def cm_files_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult:
 
     filenames = [file["partition_name"] for file in new_files]
 
-    add_request = cm_permit_files_partitions.build_add_request(filenames)
+    add_request = cm_raw_files_partitions.build_add_request(filenames)
     context.log.info(f"Adding new partitions: {filenames}")
-    context.instance.add_dynamic_partitions(cm_permit_files_partitions.name, filenames)
+    context.instance.add_dynamic_partitions(cm_raw_files_partitions.name, filenames)
 
     run_requests = [
         dg.RunRequest(
