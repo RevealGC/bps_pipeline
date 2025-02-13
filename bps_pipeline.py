@@ -3,7 +3,6 @@
 from pathlib import Path
 import dagster as dg
 from dagster import EnvVar
-from dagster_duckdb_pandas import DuckDBPandasIOManager
 
 # assets
 from assets.bps_survey import (
@@ -55,10 +54,6 @@ defs = dg.Definitions(
         ),
         "parquet_io_manager": partitioned_parquet_io_manager.configured(
             {"base_path": str(BASE_PATH)}
-        ),
-        "ddb_io_manager": DuckDBPandasIOManager(
-            database=str(BASE_PATH.joinpath("my_duckdb_database.duckdb")),  # required
-            schema="bps_pipeline",  # optional, defaults to PUBLIC
         ),
         "census_mft_resource": MFTResource(
             url=EnvVar("MFT_BASE_URL"),
