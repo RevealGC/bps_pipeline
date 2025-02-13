@@ -1,0 +1,20 @@
+[project]
+name = "bps-pipeline"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "beautifulsoup4>=4.13.3",
+    "dagster>=1.9.13",
+    "duckdb>=1.2.0",
+    "pandas>=2.2.3",
+    "pathlib>=1.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "dagster-webserver>=1.9.13",
+    "pytest>=8.3.4",
+]
