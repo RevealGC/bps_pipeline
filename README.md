@@ -16,16 +16,17 @@ cd bps_pipeline
 ```
 2. Install Dependencies:
 ```
-pip install -r requirements.txt
+pip install -r pyproject.toml
 ```
 3. set env variables
-create a .env folder
+3. Modify the `default.env` File:
+Create or edit the `default.env` file in the root directory of the repository. This file should contain the necessary environment variables required by the pipeline. For example:
 ```
-# Linux/MacOS
-echo -e "BASE_PATH=.data/\nPERMIT_DATA_DIRECTORY=.data/permit_data/" > .env
-
-# windows
-Set-Content -Path .env -Value "BASE_PATH=.data/`nPERMIT_DATA_DIRECTORY=.data/permit_data/"
+API_KEY=your_api_key_here
+DATABASE_URL=your_database_url_here
+```
+Replace `username` and `password` with the appropriate values.
+for development the provided base_path and permit_data_directories are sufficient but in production, these should point to the output path and archive csv path respectively
 
 ```
 4. Run Dagster as a Module:
