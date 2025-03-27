@@ -15,7 +15,7 @@ from dagster import (
     asset,
 )
 
-from assets.construction_monitor.cm_csv_files import cm_permit_partitions_def
+from assets.construction_monitor.cm_csv_files import cm_permit_files_partitions
 from assets.construction_monitor.cm_aggregate import evaluations_partitions_def
 from utilities.dagster_utils import get_outpath
 
@@ -28,7 +28,7 @@ from utilities.dagster_utils import get_outpath
     deps=[AssetKey("bps_survey_files")],
     group_name="cm_permits",
     description="join permit data with BPS survey data",
-    partitions_def=cm_permit_partitions_def,
+    partitions_def=cm_permit_files_partitions,
     automation_condition=AutomationCondition.eager(),
 )
 def compose_permit_models(
