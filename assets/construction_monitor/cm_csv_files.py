@@ -182,7 +182,7 @@ def cm_permit_files(context: dg.AssetExecutionContext) -> dg.Output[pd.DataFrame
     )
     permit_df.fillna("", inplace=True)
 
-    if not permit_df.empty or permit_df.shape[0] == 0:
+    if permit_df.empty:
         context.log.warning(f"No records found in {file_path}.")
         return dg.Output(permit_df, metadata={"num_rows": 0})
 
