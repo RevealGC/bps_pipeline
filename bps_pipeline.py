@@ -34,16 +34,19 @@ from assets.construction_monitor.cm_files_sensor import FileMonitorConfig
 
 defs = dg.Definitions(
     assets=dg.with_source_code_references(
-        dg.load_assets_from_modules(
-            [
-                bps_survey_data,
-                cousub_fips,
-                cm_csv_files,
-                cm_transform,
-                cm_aggregate,
-                cm_compare,
-            ]
-        )
+        [
+            *dg.load_assets_from_modules(
+                [
+                    bps_survey_data,
+                    cousub_fips,
+                    cm_csv_files,
+                    cm_transform,
+                    cm_aggregate,
+                    cm_compare,
+                ]
+            ),
+        *cm_transform.cm_modeled_assets()
+        ]
     ),
     sensors=[
         cm_files_sensor.cm_files_sensor,

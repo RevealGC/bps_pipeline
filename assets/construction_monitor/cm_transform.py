@@ -4,44 +4,33 @@ import pandas as pd
 import dagster as dg
 
 from assets.construction_monitor.cm_helper import assign_unit_group
+from assets.construction_monitor.models.cm_model_asset_factory import (
+    build_cm_model_versions_asset,
+)
 from assets.construction_monitor.cm_csv_files import (
     cm_permit_files_partitions,
 )
+from assets.construction_monitor.models import cm_surveydate
 
 shared_params = {
     "partitions_def": cm_permit_files_partitions,
-    "ins": {"df": dg.AssetIn(dg.AssetKey(["cm_permit_files"]))},
+    "ins": {"permit_df": dg.AssetIn(dg.AssetKey(["cm_permit_files"]))},
     "io_manager_key": "parquet_io_manager",
     "group_name": "cm_permits",
     "owners": ["elo.lewis@revealgc.com", "team:construction-reengineering"],
     "automation_condition": dg.AutomationCondition.eager(),
 }
 
+def cm_modeled_assets():
+    """Create versioned assets"""
+    assets_params = []
+    assets_params.extend(cm_surveydate.assets(shared_params))
+    assets = []
+    assets.extend(build_cm_model_versions_asset(**p) for p in assets_params)
 
-# calculate_permit_month.py
-# asset for permit month assignment
-@dg.asset(
-    **shared_params,
-    description="calculate permit month from permit date",
-    code_version="0.0.2",
-)
-def calculate_permit_month(df: pd.DataFrame):
-    """calculate permit month from permit date."""
-    df["permit_month"] = pd.to_datetime(df["PMT_DATE"]).dt.strftime("%Y%m")
+    return assets
 
-    code_version = "0.0.2"
-    df["code_version_months"] = code_version
 
-    permit_df = df[["permit_month", "code_version_months"]]
-
-    return dg.Output(
-        permit_df,
-        metadata={
-            "num_rows": permit_df.shape[0],
-            "num_columns": permit_df.shape[1],
-            "preview": dg.MetadataValue.md(permit_df.head().to_markdown()),
-        },
-    )
 
 
 # calculate_jurisdiction.py
@@ -51,8 +40,9 @@ def calculate_permit_month(df: pd.DataFrame):
     description="calculate permit month from permit date",
     code_version="0.0.3",
 )
-def calculate_jurisdiction(df: pd.DataFrame):
+def calculate_jurisdiction(permit_df: pd.DataFrame):
     """calculate permit jurisdiction from site jurisdiction."""
+    df = permit_df.copy()
     df["jurisdiction"] = df["SITE_JURIS"].str.upper()
     df["state"] = df["SITE_STATE"].str.upper()
     # site state fips is not always available
@@ -88,8 +78,9 @@ def calculate_jurisdiction(df: pd.DataFrame):
     description="calculate permit unit group",
     code_version="0.0.2",
 )
-def calculate_unit_group(df: pd.DataFrame):
+def calculate_unit_group(permit_df: pd.DataFrame):
     """calculate permit unit group from permit units."""
+    df = permit_df.copy()
     df["PMT_UNITS"] = pd.to_numeric(df["PMT_UNITS"], errors="coerce")
     df["unit_group"] = df["PMT_UNITS"].apply(assign_unit_group)
 
@@ -114,7 +105,8 @@ def calculate_unit_group(df: pd.DataFrame):
     description="calculate permit dwellings",
     code_version="0.0.2",
 )
-def impute_dwellings(df: pd.DataFrame):
+def impute_dwellings(permit_df: pd.DataFrame):
+    df = permit_df.copy()
     """impute permit dwellings from permit units."""
     df["permit_dwellings"] = df["PMT_UNITS"].fillna(0)
     code_version = "0.0.2"
