@@ -6,6 +6,8 @@ from dagster import EnvVar
 import warnings
 
 warnings.filterwarnings("ignore", category=dg.ExperimentalWarning)
+BASE_PATH = Path(EnvVar("BASE_PATH").get_value()).expanduser().resolve()
+
 
 # assets
 from assets.bps_survey import (
@@ -29,7 +31,6 @@ from assets.construction_monitor.cm_files_sensor import FileMonitorConfig
 
 # sensors
 # from sensors.release_sensor import release_sensor
-BASE_PATH = Path(EnvVar("BASE_PATH").get_value()).expanduser().resolve()
 
 defs = dg.Definitions(
     assets=dg.with_source_code_references(
