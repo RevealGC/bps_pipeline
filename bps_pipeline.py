@@ -3,6 +3,9 @@
 from pathlib import Path
 import dagster as dg
 from dagster import EnvVar
+import warnings
+
+warnings.filterwarnings("ignore", category=dg.ExperimentalWarning)
 
 # assets
 from assets.bps_survey import (
