@@ -5,7 +5,7 @@ import re
 from typing import Optional
 import pandas as pd
 import dagster as dg
-from dagster._seven.temp_dir import get_system_temp_directory
+from dagster_shared.seven.temp_dir import get_system_temp_directory
 from pydantic import Field
 
 
