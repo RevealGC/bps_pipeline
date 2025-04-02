@@ -5,7 +5,7 @@ import dagster as dg
 
 from assets.construction_monitor.cm_helper import assign_unit_group
 from assets.construction_monitor.models.cm_model_asset_factory import (
-    build_cm_model_versions_asset,
+    build_all_model_assets
 )
 from assets.construction_monitor.cm_csv_files import (
     cm_permit_files_partitions,
@@ -23,14 +23,31 @@ shared_params = {
 
 def cm_modeled_assets():
     """Create versioned assets"""
-    assets_params = []
-    assets_params.extend(cm_surveydate.assets(shared_params))
-    assets = []
-    assets.extend(build_cm_model_versions_asset(**p) for p in assets_params)
-
-    return assets
+    assets_params = [
+        cm_surveydate.assets
+    ]
+    return build_all_model_assets(assets_params, shared_params)
 
 
+# still needed for aggregates
+@dg.asset(
+    **shared_params,
+)
+def calculate_permit_month(permit_df: pd.DataFrame):
+    """
+    calculate permit month from permit date.
+    This is a placeholder to ensure cm_modeled_assets() can be called.
+    """
+    result_df = permit_df.copy()
+    result_df["permit_month"] = pd.to_datetime(result_df["PMT_DATE"]).dt.strftime("%Y%m")
+    return dg.Output(
+        result_df[["permit_month"]],
+        metadata={
+            "num_rows": result_df.shape[0],
+            "num_columns": 1,
+            "preview": dg.MetadataValue.md(result_df.head().to_markdown()),
+        },
+    )   
 
 
 # calculate_jurisdiction.py
