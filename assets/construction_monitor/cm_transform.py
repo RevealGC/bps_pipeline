@@ -3,14 +3,19 @@
 import pandas as pd
 import dagster as dg
 
-from assets.construction_monitor.cm_helper import assign_unit_group
+from assets.construction_monitor.cm_helper import assign_unit_group # remove after fixing agg
 from assets.construction_monitor.models.cm_model_asset_factory import (
     build_all_model_assets
 )
 from assets.construction_monitor.cm_csv_files import (
     cm_permit_files_partitions,
 )
-from assets.construction_monitor.models import cm_surveydate
+from assets.construction_monitor.models import (
+    cm_surveydate,
+    cm_jurisdiction,
+    cm_unitgroup,
+    cm_dwellings
+    )
 
 shared_params = {
     "partitions_def": cm_permit_files_partitions,
@@ -24,8 +29,12 @@ shared_params = {
 def cm_modeled_assets():
     """Create versioned assets"""
     assets_params = [
-        cm_surveydate.assets
+        cm_surveydate.assets,
+        cm_unitgroup.assets,
+        cm_jurisdiction.assets,
+        cm_dwellings.assets,
     ]
+
     return build_all_model_assets(assets_params, shared_params)
 
 
