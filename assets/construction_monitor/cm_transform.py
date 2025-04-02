@@ -123,8 +123,8 @@ def calculate_unit_group(permit_df: pd.DataFrame):
     code_version="0.0.2",
 )
 def impute_dwellings(permit_df: pd.DataFrame):
-    df = permit_df.copy()
     """impute permit dwellings from permit units."""
+    df = permit_df.copy()
     df["permit_dwellings"] = df["PMT_UNITS"].fillna(0)
     code_version = "0.0.2"
     df["code_version_dwellings"] = code_version
