@@ -16,7 +16,7 @@ def build_census_sensor(
     description: str = None,
     name_prefix: Optional[str] = "",
     name_suffix: Optional[str] = "",
-    min_interval_seconds: Optional[int] = 3600,
+    min_interval_seconds: Optional[int] = 30,
     file_filter: Optional[str] = None,
     batch_size: Optional[int] = 4,
 ) -> dg.SensorDefinition:
