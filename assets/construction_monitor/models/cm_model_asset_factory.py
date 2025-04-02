@@ -1,4 +1,4 @@
-from functools import wraps
+# from functools import wraps
 from typing import Callable
 import dagster as dg
 
@@ -35,7 +35,7 @@ def build_cm_model_versions_asset(
         name=asset_name,
         code_version=version,
     )
-    @wraps(asset_func)  # Preserve function metadata
+    # @wraps(asset_func)  # Preserve function metadata
     def _asset(**inputs):
         output_df = asset_func(**inputs)
         output_df[model_field_name + "_version"] = version
