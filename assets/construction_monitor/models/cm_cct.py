@@ -19,10 +19,8 @@ from nltk.stem import WordNetLemmatizer
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.linear_model import LogisticRegression
-import dagster as dg
+from scipy.stats import chi2_contingency
 
-
-# %%
 
 def clean_text_nltk(text: str) -> str:
     stop_words = set(stopwords.words('english'))
@@ -78,7 +76,6 @@ def apply_pkl_model(
 
     return pd.concat([permit_df, df_predicted], axis=1)
 
-
 def train_data(
         training_df: pd.DataFrame, 
         model_name:str, 
@@ -99,13 +96,12 @@ def train_data(
         pd.DataFrame: DataFrame with processed text.
     """
     train_sub = training_df.copy()
-    train_sub[[input_field, feature]].dropna(inplace=True)
     if subset:
         if subset_field is None:
             raise ValueError("subset_field must be provided if subset is specified")
         
-        filename = f"{filename}_{subset}"
         train_sub = train_sub[train_sub[subset_field].str.lower() == subset.lower()]
+    train_sub = train_sub[[input_field, feature]].dropna()
     
     X_train = train_sub[input_field]
     y_train = train_sub[feature]
@@ -122,7 +118,12 @@ def train_data(
 
     return fitted_model
 
-def refit_nlp_pipeline():
+def refit_nlp_pipeline(df:pd.DataFrame) -> None:
+    """
+    Refit the NLP pipeline for each feature and save the fitted models.
+    """
+    df_train = df.copy()
+
     pipeline = Pipeline([
             ("vect", CountVectorizer()),
             ("tfidf", TfidfTransformer()),
@@ -131,7 +132,6 @@ def refit_nlp_pipeline():
     features = ["Category", "Type", "Class"]
     subsets = ["Chicago", None]
     mname = "bpsnlpmodel"
-    df_train = pd.read_csv(os.path.join(PKL_MODEL_PATH, "ULCM.csv"), encoding="iso-8859-1")
 
     for feature in features:
         filename = f"{mname}_{feature}"
@@ -151,12 +151,12 @@ def refit_nlp_pipeline():
                 subset=subset,  # Use subset for city filtering if needed
                 subset_field="CM Juris Name" if subset else None  # Only used if subset is specified
             )
-# %%
-test_df = pd.read_parquet("C:/Users/ndece/Github/bps_pipeline/.data/cm_permit_files/reveal-gc-2020-41.csv.parquet")
-test_df = test_df[["EXTRACTED_DESCRIPTION","PMT_DESCRP", "SITE_STATE", "SITE_JURIS", 'PMT_UNITS']]
-# %%
 
-PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
+def refit_main():
+    PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
+    TRAINING_DATA_PATH = "C:/Users/ndece/Github/bps_pipeline/.training_data/"
+    df_tr = pd.read_csv(os.path.join(TRAINING_DATA_PATH, "dctd_cm_annaheim_oceancity_chicago_fargo.csv"), encoding="iso-8859-1")
+    refit_nlp_pipeline(df_tr)
 
 def preprocess_comb_desc(permit_df: pd.DataFrame) -> pd.DataFrame:
     """preprocess combined description."""
@@ -201,10 +201,6 @@ def preprocess_comb_desc(permit_df: pd.DataFrame) -> pd.DataFrame:
 
 
     return concat_df
-p = preprocess_comb_desc(test_df)
-p 
-# %% preprocessed_df = 
-from scipy.stats import chi2_contingency
 
 def compare_subsets(feature, df):
     # Subset data for the feature
@@ -230,11 +226,17 @@ def compare_subsets(feature, df):
         print("No significant difference between subsets")
     print()
 
-# Loop through features and compare subsets
+#%%
+
+test_df = pd.read_parquet("C:/Users/ndece/Github/bps_pipeline/.data/cm_permit_files/reveal-gc-2020-41.csv.parquet")
+test_df = test_df[["EXTRACTED_DESCRIPTION","PMT_DESCRP", "SITE_STATE", "SITE_JURIS", 'PMT_UNITS']]
+
+PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
+
+p = preprocess_comb_desc(test_df)
+
 features = p['feature'].unique()
 for feature in features:
     compare_subsets(feature, p)
-# example usage of the above functions
-# mname = "bpsnlpmodel_class_fargo_fitted"
-# df_result = apply_pkl_model(preprocessed_df, mname, "comb_desc", "predicted")
+
 # %%
