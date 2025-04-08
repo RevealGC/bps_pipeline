@@ -166,3 +166,4 @@ cython_debug/
 .data
 tmp*
 .dagster*
+.training_data
