@@ -227,16 +227,16 @@ def compare_subsets(feature, df):
     print()
 
 #%%
+def main():
+    test_df = pd.read_parquet("C:/Users/ndece/Github/bps_pipeline/.data/cm_permit_files/reveal-gc-2020-41.csv.parquet")
+    test_df = test_df[["EXTRACTED_DESCRIPTION","PMT_DESCRP", "SITE_STATE", "SITE_JURIS", 'PMT_UNITS']]
 
-test_df = pd.read_parquet("C:/Users/ndece/Github/bps_pipeline/.data/cm_permit_files/reveal-gc-2020-41.csv.parquet")
-test_df = test_df[["EXTRACTED_DESCRIPTION","PMT_DESCRP", "SITE_STATE", "SITE_JURIS", 'PMT_UNITS']]
+    PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
 
-PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
+    p = preprocess_comb_desc(test_df)
 
-p = preprocess_comb_desc(test_df)
-
-features = p['feature'].unique()
-for feature in features:
-    compare_subsets(feature, p)
+    features = p['feature'].unique()
+    for feature in features:
+        compare_subsets(feature, p)
 
 # %%
