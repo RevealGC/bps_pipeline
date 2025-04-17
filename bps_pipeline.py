@@ -49,6 +49,7 @@ defs = dg.Definitions(
         ]
     ),
     sensors=[
+        cm_aggregate.sync_model_combinations_partitions_sensor,
         cm_files_sensor.cm_files_sensor,
         *cousub_fips.census_sensors,
         *bps_survey_data.bps_releases_sensors(),
