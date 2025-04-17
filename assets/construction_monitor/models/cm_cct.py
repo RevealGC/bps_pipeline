@@ -118,7 +118,7 @@ def train_data(
 
     return fitted_model
 
-def refit_nlp_pipeline(df:pd.DataFrame) -> None:
+def refit_nlp_pipeline(df:pd.DataFrame,PKL_MODEL_PATH) -> None:
     """
     Refit the NLP pipeline for each feature and save the fitted models.
     """
@@ -156,9 +156,9 @@ def refit_main():
     PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
     TRAINING_DATA_PATH = "C:/Users/ndece/Github/bps_pipeline/.training_data/"
     df_tr = pd.read_csv(os.path.join(TRAINING_DATA_PATH, "dctd_cm_annaheim_oceancity_chicago_fargo.csv"), encoding="iso-8859-1")
-    refit_nlp_pipeline(df_tr)
+    refit_nlp_pipeline(df_tr,PKL_MODEL_PATH)
 
-def preprocess_comb_desc(permit_df: pd.DataFrame) -> pd.DataFrame:
+def preprocess_comb_desc(permit_df: pd.DataFrame,PKL_MODEL_PATH) -> pd.DataFrame:
     """preprocess combined description."""
 
     features = ["Category", "Type", "Class"]
@@ -233,10 +233,26 @@ def main():
 
     PKL_MODEL_PATH = "C:/Users/ndece/Github/bps_pipeline/pkl/"
 
-    p = preprocess_comb_desc(test_df)
+    p = preprocess_comb_desc(test_df,PKL_MODEL_PATH)
 
     features = p['feature'].unique()
     for feature in features:
         compare_subsets(feature, p)
 
-# %%
+
+# ------------------------------------------------------------
+# dagster asset definitions
+# ------------------------------------------------------------
+
+def v0_0_1(permit_df: pd.DataFrame) -> pd.DataFrame:
+    """calculate permit month from permit date."""
+    df = permit_df.copy()
+    p = preprocess_comb_desc(df, "C:/Users/ndece/Github/bps_pipeline/pkl/")
+    pivot_df = p.reset_index(names="index").pivot(index=["index", "subset"], columns=["feature"], values="predicted").reset_index().set_index("index")
+    
+    return pivot_df
+
+assets = {
+    "field_name": "cct",
+    "active_versions": [v0_0_1]  # List of active versions for this asset
+}

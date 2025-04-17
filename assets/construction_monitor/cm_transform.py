@@ -3,7 +3,7 @@
 import pandas as pd
 import dagster as dg
 
-from assets.construction_monitor.cm_helper import assign_unit_group # remove after fixing agg
+from assets.construction_monitor.cm_helper import assign_unit_group
 from assets.construction_monitor.models.cm_model_asset_factory import (
     build_all_model_assets
 )
@@ -14,7 +14,8 @@ from assets.construction_monitor.models import (
     cm_surveydate,
     cm_jurisdiction,
     cm_unitgroup,
-    cm_dwellings
+    cm_dwellings,
+    cm_cct,
     )
 
 shared_params = {
@@ -26,15 +27,20 @@ shared_params = {
     "automation_condition": dg.AutomationCondition.eager(),
 }
 
-def cm_modeled_assets():
-    """Create versioned assets"""
-    assets_params = [
-        cm_surveydate.assets,
-        cm_unitgroup.assets,
-        cm_jurisdiction.assets,
-        cm_dwellings.assets,
-    ]
+assets_params = [
+    cm_surveydate.assets,
+    cm_unitgroup.assets,
+    cm_jurisdiction.assets,
+    cm_dwellings.assets,
+    cm_cct.assets,
+]
 
+def cm_modeled_assets():
+    """
+    Create versioned assets
+    NOTE: asset params removed for reuse by agg functions
+    unnessary wrapper legacy - refactor
+    """
     return build_all_model_assets(assets_params, shared_params)
 
 
