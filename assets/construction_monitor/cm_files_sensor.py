@@ -8,6 +8,7 @@ import dagster as dg
 
 from assets.construction_monitor.cm_csv_files import cm_raw_files_partitions
 
+from assets.construction_monitor.cm_helper import rename_cm_weekly_file
 
 # class ConfigFileDirectories:
 #     def __init__(self, local_directories: List[str], file_pattern: str):
@@ -59,12 +60,12 @@ def cm_files_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult:
             if not file_path.is_file() and file_regex.match(file_path.name):
                 skip_counter += 1
                 continue
-
+            new_file_name = rename_cm_weekly_file(str(file_path.name), "")
             if not context.instance.has_dynamic_partition(
-                cm_raw_files_partitions.name, str(file_path.name)
+                cm_raw_files_partitions.name, str(new_file_name)
             ):
                 file_dict = {
-                    "partition_name": str(file_path.name),
+                    "partition_name": new_file_name,
                     "file_path": str(file_path),
                     "last_modified": datetime.fromtimestamp(
                         file_path.stat().st_mtime, tz=timezone.utc

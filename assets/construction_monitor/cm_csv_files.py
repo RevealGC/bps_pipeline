@@ -168,7 +168,7 @@ def cm_permit_files(context: dg.AssetExecutionContext) -> dg.Output[pd.DataFrame
     mft_client = mft_resource.get_client()
     results = mft_client.send_file(
         target_file=file_path,
-        dest_name=rename_cm_weekly_file(context.partition_key),
+        dest_name= f"{context.partition_key}.csv",
         dest_folder="rgc_rawdata_cm",
     )
     results_md = f"```json\n{json.dumps(results, indent=2)}\n```"

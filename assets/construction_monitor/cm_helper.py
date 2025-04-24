@@ -46,7 +46,7 @@ def parse_cm_date(cm_file):
 
 
 # %%
-def rename_cm_weekly_file(filename: str) -> str:
+def rename_cm_weekly_file(filename: str, file_ext = ".csv") -> str:
     """Rename cm_weekly file to match the format of cm_monthly file."""
 
     pattern = (
@@ -64,5 +64,5 @@ def rename_cm_weekly_file(filename: str) -> str:
     date_str = first_day.strftime("%Y_%m_%d")
 
     # Build the new filename
-    new_filename = f"cm_orig_{date_str}.csv"
+    new_filename = f"cm_orig_{date_str}{file_ext}"
     return new_filename
