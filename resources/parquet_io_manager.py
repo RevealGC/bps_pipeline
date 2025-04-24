@@ -22,6 +22,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """
     filename = re.sub(r'[<>:"/\\|?*]', "_", filename)  # Replace invalid characters
     filename = re.sub(r"\s+", "_", filename)  # Replace spaces with underscores
+    filename = re.sub(r'[<>:"/\\|?*;=]', "_", filename) ## Replace other invalid characters
     filename = filename.strip(" ._")  # Remove leading/trailing spaces
     return filename[:max_length]  # Truncate filename to max length
 
@@ -65,7 +66,7 @@ class PartitionedParquetIOManager(dg.ConfigurableIOManager):
         """
         asset_name = "_".join(context.asset_key.path)
 
-        partition_path = asset_name
+        # partition_path = asset_name
         if context.has_partition_key:
             if isinstance(context.partition_key, str):
                 partition_path = sanitize_filename(context.partition_key)
@@ -152,6 +153,12 @@ class PartitionedParquetIOManager(dg.ConfigurableIOManager):
             return
 
         output_path = self._resolve_path(context, mode="output")
+        dir_path, file_name = os.path.split(output_path)
+        sanitized_file_name = sanitize_filename(file_name)
+
+        context.log.info(f"sanitized_file_name: {sanitized_file_name}")
+        output_path = os.path.join(dir_path, sanitized_file_name)
+
         context.log.info(f"Saving Parquet file to: {output_path}")
 
         if "://" not in output_path:  # Ensure local directory exists
